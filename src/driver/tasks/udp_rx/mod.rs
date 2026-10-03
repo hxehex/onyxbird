@@ -15,7 +15,7 @@ use crate::{
 use bytes::BytesMut;
 use discortp::{
     demux::{self, DemuxedMut},
-    rtp::RtpPacket,
+    rtp::{RtpPacket},
 };
 use discortp::{MutablePacket, Packet};
 use flume::Receiver;
@@ -30,7 +30,7 @@ use std::{
     time::Duration,
 };
 use tokio::{net::UdpSocket, select, time::Instant};
-use tracing::{error, instrument, trace, warn};
+use tracing::{instrument, trace, warn};
 
 type RtpSequence = Wrapping<u16>;
 type RtpTimestamp = Wrapping<u32>;
@@ -163,94 +163,95 @@ impl UdpRx {
         match demux::demux_mut(packet.as_mut()) {
             DemuxedMut::Rtp(mut rtp) => {
                 if !rtp_valid(&rtp.to_immutable()) {
-                    error!("Illegal RTP message received.");
                     return;
                 }
+
+                let ssrc = rtp.get_ssrc();
+                let has_extension = rtp.get_extension() != 0;
 
                 let mut packet_data = if self.config.decode_mode.should_decrypt() {
                     let out = self.cipher.decrypt_rtp_in_place(&mut rtp).map(|(s, t)| {
                         if rtp.get_padding() != 0 {
                             let payload = rtp.payload();
-                            let payload_length = payload.len();
-                            let padding_count = payload[payload_length - t - 1] as usize;
-
+                            let padding_count = payload[payload.len() - t - 1] as usize;
                             (s, t + padding_count, true)
                         } else {
                             (s, t, true)
                         }
                     });
 
-                    if let Err(ref e) = out {
-                        warn!("RTP decryption failed: {:?}", e);
-                    }
-
+                    if let Err(ref e) = out { warn!("RTP decryption failed: {:?}", e); }
                     out.ok()
                 } else {
                     None
                 };
 
+                let mut shrinkage = 0;
+                let mut should_drop = false;
+
                 if let Some((rtp_body_start, rtp_body_tail, decrypted)) = packet_data {
-                    let ssrc = rtp.get_ssrc();
                     let payload = rtp.payload_mut();
                     let payload_length = payload.len();
-                    let body = &mut payload[rtp_body_start..payload_length - rtp_body_tail];
-                    let body_length = body.len();
+                    
+                    // FIX: Read extension length from index 2 and 3 of payload (the actual RTP extension header)
+                    let mut ext_len = 0;
+                    if has_extension && payload.len() >= 4 {
+                        let words = u16::from_be_bytes([payload[2], payload[3]]) as usize;
+                        ext_len = 4 + (words * 4);
+                    }
 
-                    // If the packet is transport-decrypted, DAVE is enabled, and the packet
-                    // looks encrypted: https://daveprotocol.com/#protocol-frame-check
-                    // The packet must be at least 11 bytes consisting of:
-                    // - 8 byte truncated AES128-GCM authentication tag
-                    // - 1 byte protocol supplemental data size
-                    // - 2 byte magic marker
-                    if decrypted
-                        && self.dave_protocol_version.load(Ordering::Relaxed) != 0
-                        && body_length >= 11
-                        && body[body_length - DAVE_MAGIC_MARKER.len()..body_length]
-                            == DAVE_MAGIC_MARKER
-                    {
-                        // Silently drop encrypted packets if it's not possible to decrypt them for
-                        // one reason or another; otherwise there'd be error logs for trying to decode
-                        // Opus
-                        let Some(user_id) = self.ssrc_signalling.ssrc_user_map.get(&ssrc) else {
-                            return;
-                        };
-                        let Some(ref mut dave_session) = *self.dave_session.write().unwrap() else {
-                            return;
-                        };
+                    // DAVE Ciphertext starts immediately after the full extension (header + payload)
+                    let cipher_start = ext_len;
+                    let cipher_end = payload_length.saturating_sub(rtp_body_tail);
 
-                        if !dave_session.is_ready() {
-                            return;
-                        }
+                    let dave_version = self.dave_protocol_version.load(Ordering::Relaxed);
 
-                        let result = dave_session.decrypt(user_id.0, davey::MediaType::AUDIO, body);
+                    if cipher_start < cipher_end {
+                        let body = &mut payload[cipher_start..cipher_end];
+                        let body_length = body.len();
 
-                        match result {
-                            Ok(decrypted_body) => {
-                                packet_data = Some((
-                                    rtp_body_start,
-                                    rtp_body_tail + (body.len() - decrypted_body.len()),
-                                    decrypted,
-                                ));
-                                body[..decrypted_body.len()].copy_from_slice(&decrypted_body);
-                            },
-                            Err(davey::errors::DecryptError::NoDecryptorForUser)
-                            | Err(davey::errors::DecryptError::DecryptionFailed(
-                                davey::errors::DecryptorDecryptError::NoValidCryptorFound {
-                                    ..
-                                },
-                            )) => {
-                                // Silently drop encrypted packets for users whose ratchets are not configured yet.
-                                return;
-                            },
-                            Err(e) => {
-                                error!(error = ?e, "DAVE decryption failed");
-                                return;
-                            },
+                        let has_marker = body_length >= 11 && body[body_length - DAVE_MAGIC_MARKER.len()..] == DAVE_MAGIC_MARKER[..];
+
+                        if decrypted && dave_version != 0 {
+                            if has_marker {
+                                let mut decrypted_successfully = false;
+                                
+                                if let Some(user_id) = self.ssrc_signalling.ssrc_user_map.get(&ssrc) {
+                                    if let Some(ref mut dave_session) = *self.dave_session.write().unwrap() {
+                                        if dave_session.is_ready() {
+                                            match dave_session.decrypt(user_id.0, davey::MediaType::AUDIO, body) {
+                                                Ok(decrypted_body) => {
+                                                    shrinkage = body.len() - decrypted_body.len();
+                                                    body[..decrypted_body.len()].copy_from_slice(&decrypted_body);
+                                                    decrypted_successfully = true;
+                                                },
+                                                Err(_) => {}
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                if !decrypted_successfully {
+                                    should_drop = true;
+                                }
+                            }
                         }
                     }
+                    
+                    if shrinkage > 0 {
+                        // Shift the Transport MAC left to cover the gap left by the stripped DAVE MAC
+                        let suffix_start = payload_length - rtp_body_tail;
+                        let suffix_end = payload_length;
+                        payload.copy_within(suffix_start..suffix_end, suffix_start - shrinkage);
+                    }
+                    
+                    packet_data = Some((rtp_body_start, rtp_body_tail, decrypted));
                 }
 
-                let rtp = rtp.to_immutable();
+                if should_drop {
+                    return; 
+                }
+
                 let (rtp_body_start, rtp_body_tail, decrypted) = packet_data.unwrap_or_else(|| {
                     (
                         crypto_mode.payload_prefix_len(),
@@ -259,25 +260,33 @@ impl UdpRx {
                     )
                 });
 
+                drop(rtp);
+
+                if shrinkage > 0 {
+                    let new_len = packet.len() - shrinkage;
+                    packet.truncate(new_len);
+                }
+
+                let rtp_immutable = RtpPacket::new(&packet).unwrap();
+
                 let entry = self
                     .decoder_map
-                    .entry(rtp.get_ssrc())
-                    .or_insert_with(|| SsrcState::new(&rtp, crypto_mode, &self.config));
+                    .entry(ssrc)
+                    .or_insert_with(|| SsrcState::new(&rtp_immutable, crypto_mode, &self.config));
 
-                // Only do this on RTP, rather than RTCP -- this pins decoder state liveness
-                // to *speech* rather than just presence.
                 entry.refresh_timer(self.config.decode_state_timeout.into());
 
                 let store_pkt = StoredPacket {
                     packet: packet.freeze(),
                     decrypted,
                 };
-                let packet = store_pkt.packet.clone();
+                
+                let packet_frozen = store_pkt.packet.clone();
                 entry.store_packet(store_pkt, &self.config);
 
                 drop(interconnect.events.send(EventMessage::FireCoreEvent(
                     CoreContext::RtpPacket(InternalRtpPacket {
-                        packet,
+                        packet: packet_frozen,
                         payload_offset: rtp_body_start,
                         payload_end_pad: rtp_body_tail,
                     }),

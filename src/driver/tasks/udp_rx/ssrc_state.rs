@@ -10,7 +10,6 @@ use crate::{
 };
 use discortp::{rtp::RtpExtensionPacket, Packet, PacketSize};
 use opus2::{Decoder as OpusDecoder, ErrorCode};
-use tracing::{error, warn};
 
 #[derive(Debug)]
 pub struct SsrcState {
@@ -132,7 +131,6 @@ impl SsrcState {
             RtpExtensionPacket::new(data)
                 .map(|pkt| pkt.packet_size())
                 .ok_or_else(|| {
-                    error!("Extension packet indicated, but insufficient space.");
                     Error::IllegalVoicePacket
                 })
         } else {
@@ -146,25 +144,16 @@ impl SsrcState {
                 let dest_samples = (&mut out[..])
                     .try_into()
                     .expect("Decode logic will cap decode buffer size at i32::MAX.");
-                if let Err(e) = self.decoder.decode(&[], dest_samples, false) {
-                    warn!("Issue while decoding for missed packet: {:?}.", e);
-                }
+                let _ = self.decoder.decode(&[], dest_samples, false);
             }
 
-            // In general, we should expect 20 ms frames.
-            // However, Discord occasionally like to surprise us with something bigger.
-            // This is *sender-dependent behaviour*.
-            //
-            // This should scan up to find the "correct" size that a source is using,
-            // and then remember that.
             loop {
-                let tried_audio_len = self.decoder.decode(&data[start..], &mut out, false);
+                let slice_to_decode = &data[start..];
+
+                let tried_audio_len = self.decoder.decode(slice_to_decode, &mut out, false);
                 match tried_audio_len {
                     Ok(audio_len) => {
-                        // Decoding to stereo: audio_len refers to sample count irrespective of channel count.
-                        // => multiply by number of channels.
                         out.truncate(self.channels.channels() * audio_len);
-
                         break;
                     },
                     Err(e) if e.code() == ErrorCode::BufferTooSmall => {
@@ -172,12 +161,10 @@ impl SsrcState {
                             self.decode_size = self.decode_size.bump_up();
                             out = vec![0; self.decode_size.len()];
                         } else {
-                            error!("Received packet larger than Opus standard maximum,");
                             return Err(Error::IllegalVoicePacket);
                         }
                     },
                     Err(e) => {
-                        error!("Failed to decode received packet: {:?}.", e);
                         return Err(e.into());
                     },
                 }
