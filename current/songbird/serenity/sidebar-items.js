@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get","register","register_from_config","register_with"],"struct":["SongbirdKey"],"trait":["SerenityInit"]};

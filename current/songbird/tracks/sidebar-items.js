@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ControlError","LoopState","PlayError","PlayMode","ReadyState"],"struct":["Action","Queued","Track","TrackCallback","TrackHandle","TrackQueue","TrackState","View"],"type":["TrackResult"]};
