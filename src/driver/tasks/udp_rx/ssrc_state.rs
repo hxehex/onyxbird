@@ -77,12 +77,24 @@ impl SsrcState {
 
         let should_decode = config.decode_mode.should_decode();
         if let Some((packet, decrypted)) = pkt {
-            let rtp = RtpPacket::new(&packet).unwrap();
+            // `rtp_valid` only checks the version and payload type, so a truncated or otherwise
+            // malformed packet can still reach here. Never panic on adversarial rx'd data: treat
+            // an unparseable packet as a silent tick instead of killing the receive task.
+            let Some(rtp) = RtpPacket::new(&packet) else {
+                return Ok(None);
+            };
             let extensions = rtp.get_extension() != 0;
 
             let payload = rtp.payload();
             let payload_offset = self.crypto_mode.payload_prefix_len();
-            let payload_end_pad = payload.len() - self.crypto_mode.payload_suffix_len();
+            // Guard the suffix subtraction: `payload` may be shorter than the crypto suffix on a
+            // malformed packet, which would otherwise underflow (panic in debug, wrap to an
+            // out-of-bounds slice index in release at the `&payload[offset..end]` below).
+            let payload_end_pad =
+                match payload.len().checked_sub(self.crypto_mode.payload_suffix_len()) {
+                    Some(end) if end >= payload_offset => end,
+                    _ => return Ok(None),
+                };
 
             // We still need to compute missed packets here in case of long loss chains or similar.
             // This occurs due to the fallback in 'store_packet' (i.e., empty buffer and massive seq difference).
