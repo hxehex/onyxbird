@@ -1,12 +1,6 @@
-#![doc(
-    html_logo_url = "https://raw.githubusercontent.com/serenity-rs/songbird/current/songbird.png",
-    html_favicon_url = "https://raw.githubusercontent.com/serenity-rs/songbird/current/songbird-ico.png"
-)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
-//! ![project logo][logo]
-//!
 //! Songbird is an async, cross-library compatible voice system for Discord, written in Rust.
 //! The library offers:
 //!  * A standalone gateway frontend compatible with [serenity] and [twilight] using the
@@ -47,15 +41,9 @@
 //! features = ["aac", "mp3", "isomp4", "alac"] # ...as well as any extras you need!
 //! ```
 //!
-//! ## Attribution
-//!
-//! Songbird's logo is based upon the copyright-free image ["Black-Capped Chickadee"] by George Gorgas White.
-//!
-//! [logo]: https://raw.githubusercontent.com/serenity-rs/songbird/current/songbird.png
 //! [serenity]: https://github.com/serenity-rs/serenity
 //! [twilight]: https://github.com/twilight-rs/twilight
 //! [this crate's examples directory]: https://github.com/serenity-rs/songbird/tree/current/examples
-//! ["Black-Capped Chickadee"]: https://www.oldbookillustrations.com/illustrations/black-capped-chickadee/
 //! [`ConnectionInfo`]: struct@ConnectionInfo
 //! [lavalink]: https://github.com/freyacodes/Lavalink
 //! [codecs and formats provided by Symphonia]: https://github.com/pdeljanov/Symphonia#formats-demuxers

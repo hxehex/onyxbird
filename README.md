@@ -1,8 +1,4 @@
-[![crates.io badge]][crates.io] [![build badge]][build] [![docs badge]][docs] [![current docs badge]][current docs] [![next docs badge]][next docs] [![msrv badge]][msrv] [![license badge]][license] [![guild badge]][guild]
-
 # Songbird
-
-![](songbird.png)
 
 Songbird is an async, cross-library compatible voice system for Discord, written in Rust.
 The library offers:
@@ -65,33 +61,11 @@ Full examples showing various types of functionality and integrations can be fou
 ## Contributing
 If you want to help out or file an issue, please look over [our contributor guidelines]!
 
-## Attribution
-Songbird's logo is based upon the copyright-free image ["Black-Capped Chickadee"] by George Gorgas White.
-
 [serenity]: https://github.com/serenity-rs/serenity
 [twilight]: https://github.com/twilight-rs/twilight
-["Black-Capped Chickadee"]: https://www.oldbookillustrations.com/illustrations/black-capped-chickadee/
 [lavalink]: https://github.com/freyacodes/Lavalink
 [this crate's examples directory]: https://github.com/serenity-rs/songbird/tree/current/examples
 [our contributor guidelines]: CONTRIBUTING.md
 [codecs and formats provided by Symphonia]: https://github.com/pdeljanov/Symphonia#formats-demuxers
 [opus2]: https://github.com/cijiugechu/opus2
 [according to the installation instructions on the main repo]: https://github.com/yt-dlp/yt-dlp#installation
-
-<!-- Badges -->
-[crates.io]: https://crates.io/crates/songbird
-[crates.io badge]: https://img.shields.io/crates/v/songbird.svg?style=flat-square
-[build]: https://github.com/serenity-rs/songbird/actions
-[build badge]: https://img.shields.io/github/actions/workflow/status/serenity-rs/songbird/ci.yml?branch=current&style=flat-square
-[docs]: https://docs.rs/songbird/
-[docs badge]: https://img.shields.io/badge/docs-online-informational?style=flat-square
-[current docs]: https://serenity-rs.github.io/songbird/current/songbird/index.html
-[current docs badge]: https://img.shields.io/badge/docs-current-4d76ae.svg?style=flat-square
-[next docs]: https://serenity-rs.github.io/songbird/next/songbird/index.html
-[next docs badge]: https://img.shields.io/badge/docs-next-4d76ae.svg?style=flat-square
-[msrv]: https://blog.rust-lang.org/2024/11/28/Rust-1.83.0.html
-[msrv badge]: https://img.shields.io/badge/rust-1.83+-93450a.svg?style=flat-square
-[license]: LICENSE
-[license badge]: https://img.shields.io/crates/l/songbird.svg?style=flat-square&color=yellow
-[guild]: https://discord.gg/serenity-rs
-[guild badge]: https://img.shields.io/discord/381880193251409931.svg?style=flat-square&colorB=7289DA
