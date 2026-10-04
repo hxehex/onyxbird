@@ -4,23 +4,6 @@
 
 ![](songbird.png)
 
-> ### Onyxbird — maintained downstream fork
->
-> This is a fork of [serenity-rs/songbird](https://github.com/serenity-rs/songbird) maintained
-> for the Onyxype project. It tracks upstream `current` and carries fixes we run in production:
->
-> - **DAVE (E2EE) voice receive** — account for variable-length RTP header extensions when
->   locating the ciphertext (`ext_len = 4 + words*4`), and shift the trailing transport MAC
->   left after the payload shrinks on decrypt, so DAVE audio decrypts and verifies instead of
->   being dropped.
-> - **Receive-path hardening** — never panic on truncated/malformed RTP packets. `rtp_valid`
->   only checks version + payload type, so a short packet previously underflowed the crypto
->   suffix subtraction and could kill the `udp_rx` task; such packets are now treated as a
->   silent tick.
->
-> All credit for the original library belongs to the Songbird authors — see [LICENSE](LICENSE)
-> and the [upstream repository](https://github.com/serenity-rs/songbird).
-
 Songbird is an async, cross-library compatible voice system for Discord, written in Rust.
 The library offers:
  * A standalone gateway frontend compatible with [serenity] and [twilight] using the
