@@ -394,7 +394,7 @@ impl Onyxbird {
                 if self
                     .client_data
                     .get()
-                    .map_or(true, |data| v.0.user_id.into_nonzero() != data.user_id.0)
+                    .is_none_or(|data| v.0.user_id.into_nonzero() != data.user_id.0)
                 {
                     return;
                 }

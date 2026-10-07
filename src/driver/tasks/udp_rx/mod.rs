@@ -15,7 +15,7 @@ use crate::{
 use bytes::BytesMut;
 use discortp::{
     demux::{self, DemuxedMut},
-    rtp::{RtpPacket},
+    rtp::RtpPacket,
 };
 use discortp::{MutablePacket, Packet};
 use flume::Receiver;
@@ -180,7 +180,9 @@ impl UdpRx {
                         }
                     });
 
-                    if let Err(ref e) = out { warn!("RTP decryption failed: {:?}", e); }
+                    if let Err(ref e) = out {
+                        warn!("RTP decryption failed: {:?}", e);
+                    }
                     out.ok()
                 } else {
                     None
@@ -192,7 +194,7 @@ impl UdpRx {
                 if let Some((rtp_body_start, rtp_body_tail, decrypted)) = packet_data {
                     let payload = rtp.payload_mut();
                     let payload_length = payload.len();
-                    
+
                     // FIX: Read extension length from index 2 and 3 of payload (the actual RTP extension header)
                     let mut ext_len = 0;
                     if has_extension && payload.len() >= 4 {
@@ -210,17 +212,26 @@ impl UdpRx {
                         let body = &mut payload[cipher_start..cipher_end];
                         let body_length = body.len();
 
-                        let has_marker = body_length >= 11 && body[body_length - DAVE_MAGIC_MARKER.len()..] == DAVE_MAGIC_MARKER[..];
+                        let has_marker = body_length >= 11
+                            && body[body_length - DAVE_MAGIC_MARKER.len()..]
+                                == DAVE_MAGIC_MARKER[..];
 
                         if decrypted && dave_version != 0 && has_marker {
                             let mut decrypted_successfully = false;
 
                             if let Some(user_id) = self.ssrc_signalling.ssrc_user_map.get(&ssrc) {
-                                if let Some(ref mut dave_session) = *self.dave_session.write().unwrap() {
+                                if let Some(ref mut dave_session) =
+                                    *self.dave_session.write().unwrap()
+                                {
                                     if dave_session.is_ready() {
-                                        if let Ok(decrypted_body) = dave_session.decrypt(user_id.0, davey::MediaType::AUDIO, body) {
+                                        if let Ok(decrypted_body) = dave_session.decrypt(
+                                            user_id.0,
+                                            davey::MediaType::AUDIO,
+                                            body,
+                                        ) {
                                             shrinkage = body.len() - decrypted_body.len();
-                                            body[..decrypted_body.len()].copy_from_slice(&decrypted_body);
+                                            body[..decrypted_body.len()]
+                                                .copy_from_slice(&decrypted_body);
                                             decrypted_successfully = true;
                                         }
                                     }
@@ -232,19 +243,19 @@ impl UdpRx {
                             }
                         }
                     }
-                    
+
                     if shrinkage > 0 {
                         // Shift the Transport MAC left to cover the gap left by the stripped DAVE MAC
                         let suffix_start = payload_length - rtp_body_tail;
                         let suffix_end = payload_length;
                         payload.copy_within(suffix_start..suffix_end, suffix_start - shrinkage);
                     }
-                    
+
                     packet_data = Some((rtp_body_start, rtp_body_tail, decrypted));
                 }
 
                 if should_drop {
-                    return; 
+                    return;
                 }
 
                 let (rtp_body_start, rtp_body_tail, decrypted) = packet_data.unwrap_or_else(|| {
@@ -275,7 +286,7 @@ impl UdpRx {
                     packet: packet.freeze(),
                     decrypted,
                 };
-                
+
                 let packet_frozen = store_pkt.packet.clone();
                 entry.store_packet(store_pkt, &self.config);
 

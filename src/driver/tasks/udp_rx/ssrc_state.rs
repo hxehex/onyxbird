@@ -90,11 +90,13 @@ impl SsrcState {
             // Guard the suffix subtraction: `payload` may be shorter than the crypto suffix on a
             // malformed packet, which would otherwise underflow (panic in debug, wrap to an
             // out-of-bounds slice index in release at the `&payload[offset..end]` below).
-            let payload_end_pad =
-                match payload.len().checked_sub(self.crypto_mode.payload_suffix_len()) {
-                    Some(end) if end >= payload_offset => end,
-                    _ => return Ok(None),
-                };
+            let payload_end_pad = match payload
+                .len()
+                .checked_sub(self.crypto_mode.payload_suffix_len())
+            {
+                Some(end) if end >= payload_offset => end,
+                _ => return Ok(None),
+            };
 
             // We still need to compute missed packets here in case of long loss chains or similar.
             // This occurs due to the fallback in 'store_packet' (i.e., empty buffer and massive seq difference).

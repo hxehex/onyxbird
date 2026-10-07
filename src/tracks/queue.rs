@@ -462,10 +462,7 @@ mod tests {
         let mut driver = Driver::new(config.clone());
 
         // File 1 is HTML with no valid audio -- this will fail to play.
-        let file1 = HttpRequest::new(
-            Client::new(),
-            "http://github.com/hxehex/onyxbird/".into(),
-        );
+        let file1 = HttpRequest::new(Client::new(), "http://github.com/hxehex/onyxbird/".into());
         let file2 = File::new("resources/ting.wav");
 
         let h1 = driver.enqueue_input(file1.into()).await;
