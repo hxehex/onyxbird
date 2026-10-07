@@ -72,7 +72,7 @@ pub enum Sharder {
 
 /// Trait for a generic shard cluster or other handle source.
 ///
-/// This allows any Discord library to be integrated with Songbird, and offers a source
+/// This allows any Discord library to be integrated with Onyxbird, and offers a source
 /// of generic shard handles.
 #[async_trait]
 pub trait GenericSharder {
@@ -103,7 +103,7 @@ impl Sharder {
         if let Sharder::Serenity(s) = self {
             s.register_shard_handle(shard_id, sender);
         } else {
-            error!("Called serenity management function on a non-serenity Songbird instance.");
+            error!("Called serenity management function on a non-serenity Onyxbird instance.");
         }
     }
 
@@ -112,7 +112,7 @@ impl Sharder {
         if let Sharder::Serenity(s) = self {
             s.deregister_shard_handle(shard_id);
         } else {
-            error!("Called serenity management function on a non-serenity Songbird instance.");
+            error!("Called serenity management function on a non-serenity Onyxbird instance.");
         }
     }
 }
@@ -205,8 +205,8 @@ impl VoiceUpdate for Shard {
 
 /// Trait for a generic shard handle to send voice state updates to Discord.
 ///
-/// This allows any Discord library to be integrated with Songbird, and is intended to
-/// wrap a message channel to a single shard. Songbird only needs to send `VoiceStateUpdate`s
+/// This allows any Discord library to be integrated with Onyxbird, and is intended to
+/// wrap a message channel to a single shard. Onyxbird only needs to send `VoiceStateUpdate`s
 /// to Discord to function.
 ///
 /// Generic libraries must be sure to call [`Call::update_server`] and [`Call::update_state`]

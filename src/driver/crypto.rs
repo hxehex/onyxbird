@@ -57,7 +57,7 @@ impl From<CryptoState> for CryptoMode {
     }
 }
 
-/// The input string could not be parsed as an encryption scheme supported by songbird.
+/// The input string could not be parsed as an encryption scheme supported by onyxbird.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct UnrecognisedCryptoMode;
 

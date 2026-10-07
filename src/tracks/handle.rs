@@ -297,6 +297,6 @@ mod tests {
         assert!(answer.is_ok());
         let answer = answer.unwrap();
         let delta = Duration::from_millis(100);
-        assert!(answer > target - delta && answer < target + delta);
+        assert!(answer > target.saturating_sub(delta) && answer < target + delta);
     }
 }

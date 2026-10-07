@@ -22,7 +22,7 @@ pub trait Compose: Send {
 
     /// Determines whether this source will be instantiated using [`create`] or [`create_async`].
     ///
-    /// Songbird will create the audio stream using either a dynamically sized thread pool,
+    /// Onyxbird will create the audio stream using either a dynamically sized thread pool,
     /// or a task on the async runtime it was spawned in respectively. Users do not need to
     /// support both these methods.
     ///
@@ -32,7 +32,7 @@ pub trait Compose: Send {
 
     /// Requests auxiliary metadata which can be accessed without parsing the file.
     ///
-    /// This method will never be called by songbird but allows, for instance, access to metadata
+    /// This method will never be called by onyxbird but allows, for instance, access to metadata
     /// which might only be visible to a web crawler e.g., uploader or source URL.
     async fn aux_metadata(&mut self) -> Result<AuxMetadata, AudioStreamError> {
         Err(AudioStreamError::Unsupported)

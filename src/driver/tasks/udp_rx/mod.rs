@@ -65,7 +65,7 @@ impl UdpRx {
                     let mut pkt = byte_dest.take().unwrap();
                     pkt.truncate(len);
 
-                    self.process_udp_message(interconnect, pkt).await;
+                    self.process_udp_message(interconnect, pkt);
                 },
                 msg = self.rx.recv_async() => {
                     match msg {
@@ -150,7 +150,7 @@ impl UdpRx {
         }
     }
 
-    async fn process_udp_message(&mut self, interconnect: &Interconnect, mut packet: BytesMut) {
+    fn process_udp_message(&mut self, interconnect: &Interconnect, mut packet: BytesMut) {
         // NOTE: errors here (and in general for UDP) are not fatal to the connection.
         // Panics should be avoided due to adversarial nature of rx'd packets,
         // but correct handling should not prompt a reconnect.
@@ -212,28 +212,23 @@ impl UdpRx {
 
                         let has_marker = body_length >= 11 && body[body_length - DAVE_MAGIC_MARKER.len()..] == DAVE_MAGIC_MARKER[..];
 
-                        if decrypted && dave_version != 0 {
-                            if has_marker {
-                                let mut decrypted_successfully = false;
-                                
-                                if let Some(user_id) = self.ssrc_signalling.ssrc_user_map.get(&ssrc) {
-                                    if let Some(ref mut dave_session) = *self.dave_session.write().unwrap() {
-                                        if dave_session.is_ready() {
-                                            match dave_session.decrypt(user_id.0, davey::MediaType::AUDIO, body) {
-                                                Ok(decrypted_body) => {
-                                                    shrinkage = body.len() - decrypted_body.len();
-                                                    body[..decrypted_body.len()].copy_from_slice(&decrypted_body);
-                                                    decrypted_successfully = true;
-                                                },
-                                                Err(_) => {}
-                                            }
+                        if decrypted && dave_version != 0 && has_marker {
+                            let mut decrypted_successfully = false;
+
+                            if let Some(user_id) = self.ssrc_signalling.ssrc_user_map.get(&ssrc) {
+                                if let Some(ref mut dave_session) = *self.dave_session.write().unwrap() {
+                                    if dave_session.is_ready() {
+                                        if let Ok(decrypted_body) = dave_session.decrypt(user_id.0, davey::MediaType::AUDIO, body) {
+                                            shrinkage = body.len() - decrypted_body.len();
+                                            body[..decrypted_body.len()].copy_from_slice(&decrypted_body);
+                                            decrypted_successfully = true;
                                         }
                                     }
                                 }
-                                
-                                if !decrypted_successfully {
-                                    should_drop = true;
-                                }
+                            }
+
+                            if !decrypted_successfully {
+                                should_drop = true;
                             }
                         }
                     }
@@ -330,6 +325,7 @@ impl UdpRx {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 #[instrument(skip(interconnect, rx, cipher))]
 pub(crate) async fn runner(
     mut interconnect: Interconnect,

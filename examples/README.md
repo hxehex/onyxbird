@@ -1,3 +1,3 @@
-# Songbird examples
+# Onyxbird examples
 
-These examples show more advanced use of Songbird, or how to include Songbird in bots built on other libraries, such as twilight or serenity.
+These examples show more advanced use of Onyxbird, or how to include Onyxbird in bots built on other libraries, such as twilight or serenity.

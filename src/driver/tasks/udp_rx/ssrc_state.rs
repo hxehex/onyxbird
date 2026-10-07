@@ -120,9 +120,7 @@ impl SsrcState {
             out.decoded_voice = audio;
         } else if should_decode {
             let mut audio = vec![0; self.decode_size.len()];
-            let dest_samples = (&mut audio[..])
-                .try_into()
-                .expect("Decode logic will cap decode buffer size at i32::MAX.");
+            let dest_samples = &mut audio[..];
             let len = self.decoder.decode(&[], dest_samples, false)?;
             audio.truncate(2 * len);
 
@@ -142,9 +140,7 @@ impl SsrcState {
         let start = if extension {
             RtpExtensionPacket::new(data)
                 .map(|pkt| pkt.packet_size())
-                .ok_or_else(|| {
-                    Error::IllegalVoicePacket
-                })
+                .ok_or(Error::IllegalVoicePacket)
         } else {
             Ok(0)
         }?;
@@ -153,9 +149,7 @@ impl SsrcState {
             let mut out = vec![0; self.decode_size.len()];
 
             for _ in 0..missed_packets {
-                let dest_samples = (&mut out[..])
-                    .try_into()
-                    .expect("Decode logic will cap decode buffer size at i32::MAX.");
+                let dest_samples = &mut out[..];
                 let _ = self.decoder.decode(&[], dest_samples, false);
             }
 

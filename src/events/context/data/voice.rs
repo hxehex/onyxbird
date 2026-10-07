@@ -6,7 +6,7 @@ use super::*;
 #[non_exhaustive]
 /// Audio data from all users in a voice channel, fired every 20ms.
 ///
-/// Songbird implements a jitter buffer to sycnhronise user packets, smooth out network latency, and
+/// Onyxbird implements a jitter buffer to sycnhronise user packets, smooth out network latency, and
 /// handle packet reordering by the network. Packet playout  via this event is delayed by approximately
 /// [`Config::playout_buffer_length`]` * 20ms` from its original arrival.
 ///
@@ -35,7 +35,7 @@ pub struct VoiceData {
     /// [`DecodeConfig::sample_rate`] and [`DecodeConfig::sample_rate`] -- channels are interleaved
     /// (i.e., `L, R, L, R, ...`) if stereo.
     ///
-    /// This value will be `None` if Songbird is not configured to decode audio.
+    /// This value will be `None` if Onyxbird is not configured to decode audio.
     ///
     /// [`DecodeConfig::decode_channels`]: crate::driver::DecodeConfig::channels
     /// [`DecodeConfig::sample_rate`]: crate::driver::DecodeConfig::sample_rate

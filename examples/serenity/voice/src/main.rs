@@ -8,16 +8,16 @@
 //! ```
 use std::env;
 
-// This trait adds the `register_songbird` and `register_songbird_with` methods
+// This trait adds the `register_onyxbird` and `register_onyxbird_with` methods
 // to the client builder below, making it easy to install this voice client.
-// The voice client can be retrieved in any command using `songbird::get(ctx).await`.
-use songbird::SerenityInit;
+// The voice client can be retrieved in any command using `onyxbird::get(ctx).await`.
+use onyxbird::SerenityInit;
 
 // Event related imports to detect track creation failures.
-use songbird::events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent};
+use onyxbird::events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent};
 
 // To turn user URLs into playable audio, we'll use yt-dlp.
-use songbird::input::YoutubeDl;
+use onyxbird::input::YoutubeDl;
 
 // YtDl requests need an HTTP client to operate -- we'll create and store our own.
 use reqwest::Client as HttpClient;
@@ -76,7 +76,7 @@ async fn main() {
     let mut client = Client::builder(&token, intents)
         .event_handler(Handler)
         .framework(framework)
-        .register_songbird()
+        .register_onyxbird()
         // We insert our own HTTP client here to make use of in
         // `~play`. If we wanted, we could supply cookies and auth
         // details ahead of time.
@@ -102,9 +102,9 @@ async fn main() {
 async fn deafen(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     let handler_lock = match manager.get(guild_id) {
@@ -157,9 +157,9 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         },
     };
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     if let Ok(handler_lock) = manager.join(guild_id, connect_to).await {
@@ -195,9 +195,9 @@ impl VoiceEventHandler for TrackErrorNotifier {
 async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
     let has_handler = manager.get(guild_id).is_some();
 
@@ -223,9 +223,9 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 async fn mute(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     let handler_lock = match manager.get(guild_id) {
@@ -289,9 +289,9 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             .expect("Guaranteed to exist in the typemap.")
     };
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -321,9 +321,9 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 async fn undeafen(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -353,9 +353,9 @@ async fn undeafen(ctx: &Context, msg: &Message) -> CommandResult {
 async fn unmute(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {

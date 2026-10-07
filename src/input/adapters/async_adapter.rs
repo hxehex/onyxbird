@@ -135,7 +135,7 @@ impl AsyncAdapterSink {
 ///
 /// This adapter takes a source implementing `AsyncRead`, and allows the receive side to
 /// pass along seek requests needed. This allows for passing bytes from exclusively `AsyncRead`
-/// streams (e.g., hyper HTTP sessions) to Songbird.
+/// streams (e.g., hyper HTTP sessions) to Onyxbird.
 pub struct AsyncAdapterStream {
     // Note: this mutex is here to appease symphonia's Send + Sync bound.
     // Only one thread should own and pull from this stream, so in practice

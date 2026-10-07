@@ -104,7 +104,7 @@ where
     assert!(state.play_time < Duration::from_secs(5));
     assert!(
         state.position < target_time + Duration::from_millis(100)
-            && state.position > target_time - Duration::from_millis(100)
+            && state.position > target_time.saturating_sub(Duration::from_millis(100))
     );
 }
 
@@ -144,6 +144,6 @@ where
     assert!(state.play_time >= Duration::from_secs(n_secs));
     assert!(
         state.position < target_time + Duration::from_millis(100)
-            && state.position > target_time - Duration::from_millis(100)
+            && state.position > target_time.saturating_sub(Duration::from_millis(100))
     );
 }

@@ -210,9 +210,9 @@ impl Call {
     ///   To prevent deadlock, any mutexes around this Call
     ///   *must* be released before this result is queried.
     ///
-    /// When using [`Songbird::join`], this pattern is correctly handled for you.
+    /// When using [`Onyxbird::join`], this pattern is correctly handled for you.
     ///
-    /// [`Songbird::join`]: crate::Songbird::join
+    /// [`Onyxbird::join`]: crate::Onyxbird::join
     #[instrument(skip(self))]
     #[inline]
     pub async fn join<C>(&mut self, channel_id: C) -> JoinResult<Join>
@@ -271,9 +271,9 @@ impl Call {
     ///   To prevent deadlock, any mutexes around this Call
     ///   *must* be released before this result is queried.
     ///
-    /// When using [`Songbird::join_gateway`], this pattern is correctly handled for you.
+    /// When using [`Onyxbird::join_gateway`], this pattern is correctly handled for you.
     ///
-    /// [`Songbird::join_gateway`]: crate::Songbird::join_gateway
+    /// [`Onyxbird::join_gateway`]: crate::Onyxbird::join_gateway
     #[instrument(skip(self))]
     #[inline]
     pub async fn join_gateway<C>(&mut self, channel_id: C) -> JoinResult<JoinGateway>

@@ -25,7 +25,7 @@ pub struct Parsed {
 
     /// Whether the contained format supports arbitrary seeking.
     ///
-    /// If set to false, Songbird will attempt to recreate the input if
+    /// If set to false, Onyxbird will attempt to recreate the input if
     /// it must seek backwards.
     pub supports_backseek: bool,
 }

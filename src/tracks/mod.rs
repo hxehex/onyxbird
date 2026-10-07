@@ -55,7 +55,7 @@ use uuid::Uuid;
 /// # Example
 ///
 /// ```rust,no_run
-/// use songbird::{driver::Driver, input::File, tracks::Track};
+/// use onyxbird::{driver::Driver, input::File, tracks::Track};
 ///
 /// // A Call is also valid here!
 /// let mut driver: Driver = Default::default();

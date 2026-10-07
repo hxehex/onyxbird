@@ -72,7 +72,7 @@ pub struct Config {
     #[cfg(all(feature = "driver", feature = "receive"))]
     /// Configures the number of audio packets to buffer for each user before playout.
     ///
-    /// A playout buffer allows Songbird to smooth out jitter in audio packet arrivals,
+    /// A playout buffer allows Onyxbird to smooth out jitter in audio packet arrivals,
     /// as well as to correct for reordering of packets by the network.
     ///
     /// This does not affect the arrival of raw packet events.
@@ -179,16 +179,16 @@ pub struct Config {
     /// If not set, a thread will be spawned to perform this, but it is recommended to create
     /// a long running thread instead of relying on a per-driver thread.
     ///
-    /// Note: When using [`Songbird`] this is overwritten automatically by its disposal thread.
+    /// Note: When using [`Onyxbird`] this is overwritten automatically by its disposal thread.
     ///
-    /// [`Songbird`]: crate::Songbird
+    /// [`Onyxbird`]: crate::Onyxbird
     pub disposer: Option<DisposalThread>,
 
     #[cfg(feature = "driver")]
     /// The scheduler is responsible for mapping idle and active [`Driver`] instances
     /// to threads.
     ///
-    /// If set to None, then songbird will use [`get_default_scheduler`].
+    /// If set to None, then onyxbird will use [`get_default_scheduler`].
     ///
     /// [`Driver`]: crate::Driver
     pub scheduler: Option<Scheduler>,

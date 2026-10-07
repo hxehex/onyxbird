@@ -8,7 +8,7 @@ const FMT_HEADER: &[u8; 16] = b"SbirdRaw\0\0\0\0\0\0\0\0";
 
 /// Adapter around a raw, interleaved, `f32` PCM byte stream.
 ///
-/// This may be used to port legacy songbird audio sources to be compatible with
+/// This may be used to port legacy onyxbird audio sources to be compatible with
 /// the symphonia backend, particularly those with unknown length (making WAV
 /// unsuitable).
 ///

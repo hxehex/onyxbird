@@ -38,7 +38,7 @@ use serenity::{
     Result as SerenityResult,
 };
 
-use songbird::{
+use onyxbird::{
     input::YoutubeDl,
     Event,
     EventContext,
@@ -83,7 +83,7 @@ async fn main() {
     let mut client = Client::builder(&token, intents)
         .event_handler(Handler)
         .framework(framework)
-        .register_songbird()
+        .register_onyxbird()
         .type_map_insert::<HttpKey>(HttpClient::new())
         .await
         .expect("Err creating client");
@@ -115,9 +115,9 @@ async fn get_http_client(ctx: &Context) -> HttpClient {
 async fn deafen(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild(&ctx.cache).unwrap().id;
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     let handler_lock = match manager.get(guild_id) {
@@ -170,9 +170,9 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         },
     };
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     if let Ok(handle_lock) = manager.join(guild_id, connect_to).await {
@@ -268,9 +268,9 @@ impl VoiceEventHandler for ChannelDurationNotifier {
 async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild(&ctx.cache).unwrap().id;
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
     let has_handler = manager.get(guild_id).is_some();
 
@@ -296,9 +296,9 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 async fn mute(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild(&ctx.cache).unwrap().id;
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     let handler_lock = match manager.get(guild_id) {
@@ -366,9 +366,9 @@ async fn play_fade(ctx: &Context, msg: &Message, mut args: Args) -> CommandResul
 
     let http_client = get_http_client(ctx).await;
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -489,9 +489,9 @@ async fn queue(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 
     let http_client = get_http_client(ctx).await;
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -527,9 +527,9 @@ async fn queue(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -561,9 +561,9 @@ async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -588,9 +588,9 @@ async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 async fn undeafen(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -619,9 +619,9 @@ async fn undeafen(ctx: &Context, msg: &Message) -> CommandResult {
 #[only_in(guilds)]
 async fn unmute(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {

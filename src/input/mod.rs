@@ -1,10 +1,10 @@
 //! Raw audio input data streams and sources.
 //!
-//! [`Input`]s in Songbird are based on [symphonia], which provides demuxing,
+//! [`Input`]s in Onyxbird are based on [symphonia], which provides demuxing,
 //! decoding and management of synchronous byte sources (i.e., any items which
 //! `impl` [`Read`]).
 //!
-//! Songbird adds support for the Opus codec to symphonia via [`OpusDecoder`],
+//! Onyxbird adds support for the Opus codec to symphonia via [`OpusDecoder`],
 //! the [DCA1] file format via [`DcaReader`], and a simple PCM adapter via [`RawReader`];
 //! the [format] and [codec registries] in [`codecs`] install these on top of those
 //! enabled in your `Cargo.toml` when you include symphonia.
@@ -17,7 +17,7 @@
 //!   a target URL for a usable audio stream, before opening an [`HttpRequest`].
 //!
 //! ## Adapters
-//! Songbird includes several adapters to make developing your own inputs easier:
+//! Onyxbird includes several adapters to make developing your own inputs easier:
 //! * [`cached::*`], which allow seeking and shared caching of an input stream (storing
 //!   it in memory in a variety of formats),
 //! * [`ChildContainer`] for managing audio given by a process chain,
@@ -100,7 +100,7 @@ use tokio::runtime::Handle as TokioHandle;
 /// #
 /// # let basic_rt = runtime::Builder::new_current_thread().enable_io().build().unwrap();
 /// # basic_rt.block_on(async {
-/// use songbird::{
+/// use onyxbird::{
 ///     driver::Driver,
 ///     input::{codecs::*, Compose, Input, MetadataError, YoutubeDl},
 ///     tracks::Track,
@@ -130,7 +130,7 @@ use tokio::runtime::Handle as TokioHandle;
 ///
 /// // In-memory sources like `Vec<u8>`, or `&'static [u8]` are easy to use, and only take a
 /// // little time for the mixer to parse their headers.
-/// // You can also use the adapters in `songbird::input::cached::*`to keep a source
+/// // You can also use the adapters in `onyxbird::input::cached::*`to keep a source
 /// // from the Internet, HTTP, or a File in-memory *and* share it among calls.
 /// let in_memory = include_bytes!("../../resources/ting.mp3");
 /// let mut in_memory_input = in_memory.into();
@@ -197,7 +197,7 @@ pub enum Input {
 impl Input {
     /// Requests auxiliary metadata which can be accessed without parsing the file.
     ///
-    /// This method will never be called by songbird but allows, for instance, access to metadata
+    /// This method will never be called by onyxbird but allows, for instance, access to metadata
     /// which might only be visible to a web crawler, e.g., uploader or source URL.
     ///
     /// This requires that the [`Input`] has a [`Compose`] available to use, otherwise it

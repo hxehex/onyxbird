@@ -1,4 +1,4 @@
-//! This example adapts Twilight's [basic lavalink bot] to use Songbird as its voice driver.
+//! This example adapts Twilight's [basic lavalink bot] to use Onyxbird as its voice driver.
 //!
 //! # Twilight-rs attribution
 //! ISC License (ISC)
@@ -20,11 +20,11 @@
 //!
 //! [basic lavalink bot]: https://github.com/twilight-rs/twilight/tree/main/examples/lavalink-basic-bot.rs
 
-use songbird::{
+use onyxbird::{
     input::{Compose, YoutubeDl},
     shards::TwilightMap,
     tracks::{PlayMode, TrackHandle},
-    Songbird,
+    Onyxbird,
 };
 use std::{collections::HashMap, env, error::Error, future::Future, num::NonZeroU64, sync::Arc};
 use tokio::sync::RwLock;
@@ -43,7 +43,7 @@ type State = Arc<StateRef>;
 struct StateRef {
     http: HttpClient,
     trackdata: RwLock<HashMap<Id<GuildMarker>, TrackHandle>>,
-    songbird: Songbird,
+    onyxbird: Onyxbird,
     standby: Standby,
 }
 
@@ -84,14 +84,14 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
                 .collect(),
         );
 
-        let songbird = Songbird::twilight(Arc::new(senders), user_id);
+        let onyxbird = Onyxbird::twilight(Arc::new(senders), user_id);
 
         (
             shards,
             Arc::new(StateRef {
                 http,
                 trackdata: Default::default(),
-                songbird,
+                onyxbird,
                 standby: Standby::new(),
             }),
         )
@@ -129,7 +129,7 @@ async fn runner(mut shard: Shard, state: Arc<StateRef>) {
 
 async fn handle_event(event: Event, state: Arc<StateRef>) {
     state.standby.process(&event);
-    state.songbird.process(&event).await;
+    state.onyxbird.process(&event).await;
 
     if let Event::MessageCreate(msg) = event {
         if msg.guild_id.is_none() || !msg.content.starts_with('!') {
@@ -169,7 +169,7 @@ async fn join(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + S
     let channel_id =
         NonZeroU64::new(channel_id).ok_or("Joined voice channel must have nonzero ID.")?;
 
-    let content = match state.songbird.join(guild_id, channel_id).await {
+    let content = match state.onyxbird.join(guild_id, channel_id).await {
         Ok(_handle) => format!("Joined <#{}>!", channel_id),
         Err(e) => format!("Failed to join <#{}>! Why: {:?}", channel_id, e),
     };
@@ -192,7 +192,7 @@ async fn leave(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + 
 
     let guild_id = msg.guild_id.unwrap();
 
-    state.songbird.leave(guild_id).await?;
+    state.onyxbird.leave(guild_id).await?;
 
     state
         .http
@@ -239,7 +239,7 @@ async fn play(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + S
             .content(&content)
             .await?;
 
-        if let Some(call_lock) = state.songbird.get(guild_id) {
+        if let Some(call_lock) = state.onyxbird.get(guild_id) {
             let mut call = call_lock.lock().await;
             let handle = call.play_input(src.into());
 
@@ -347,7 +347,7 @@ async fn stop(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + S
 
     let guild_id = msg.guild_id.unwrap();
 
-    if let Some(call_lock) = state.songbird.get(guild_id) {
+    if let Some(call_lock) = state.onyxbird.get(guild_id) {
         let mut call = call_lock.lock().await;
         let _ = call.stop();
     }

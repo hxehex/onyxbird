@@ -1,6 +1,6 @@
 //! Runner for a voice connection.
 //!
-//! Songbird's driver is a mixed-sync system, using:
+//! Onyxbird's driver is a mixed-sync system, using:
 //!  * Asynchronous connection management, event-handling, and gateway integration.
 //!  * Synchronous audio mixing, packet generation, and encoding.
 //!

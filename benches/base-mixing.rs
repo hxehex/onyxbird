@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
-use songbird::{
+use onyxbird::{
     constants::*,
     driver::{
         bench_internals::mixer::{mix_logic, state::DecodeState},
@@ -86,7 +86,7 @@ fn make_src(src: &Vec<u8>, chans: u32, hz: u32) -> (Parsed, DecodeState) {
     let local_input = Default::default();
 
     let adapted: Input =
-        songbird::input::RawAdapter::new(Cursor::new(src.clone()), hz, chans).into();
+        onyxbird::input::RawAdapter::new(Cursor::new(src.clone()), hz, chans).into();
     let promoted = match adapted {
         Input::Live(l, _) => l.promote(get_codec_registry(), get_probe()),
         _ => panic!("Failed to create a guaranteed source."),

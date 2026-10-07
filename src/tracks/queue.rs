@@ -25,7 +25,7 @@ use tracing::{info, warn};
 /// # Example
 ///
 /// ```rust,no_run
-/// use songbird::{
+/// use onyxbird::{
 ///     driver::Driver,
 ///     id::GuildId,
 ///     input::File,
@@ -464,7 +464,7 @@ mod tests {
         // File 1 is HTML with no valid audio -- this will fail to play.
         let file1 = HttpRequest::new(
             Client::new(),
-            "http://github.com/serenity-rs/songbird/".into(),
+            "http://github.com/hxehex/onyxbird/".into(),
         );
         let file2 = File::new("resources/ting.wav");
 

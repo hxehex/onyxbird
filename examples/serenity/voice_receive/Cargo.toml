@@ -7,7 +7,7 @@ edition = "2021"
 [dependencies]
 dashmap = "6"
 serenity = { workspace = true }
-songbird = { workspace = true, default-features = true, features = ["receive"] }
+onyxbird = { workspace = true, default-features = true, features = ["receive"] }
 symphonia = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

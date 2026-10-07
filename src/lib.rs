@@ -1,36 +1,36 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
-//! Songbird is an async, cross-library compatible voice system for Discord, written in Rust.
+//! Onyxbird is an async, cross-library compatible voice system for Discord, written in Rust.
 //! The library offers:
 //!  * A standalone gateway frontend compatible with [serenity] and [twilight] using the
 //!    `"gateway"` and `"[serenity/twilight]"` plus `"[rustls/native]"` features. You can even run
 //!    driverless, to help manage your [lavalink] sessions.
 //!  * A standalone driver for voice calls, via the `"driver"` feature. If you can create
 //!    a `ConnectionInfo` using any other gateway, or language for your bot, then you
-//!    can run the songbird voice driver.
+//!    can run the onyxbird voice driver.
 //!  * Voice receive and RT(C)P packet handling via the `"receive"` feature.
 //!  * And, by default, a fully featured voice system featuring events, queues,
 //!    seeking on compatible streams, shared multithreaded audio stream caches,
 //!    and direct Opus data passthrough from DCA files.
 //!
 //! ## Intents
-//! Songbird's gateway functionality requires you to specify the `GUILD_VOICE_STATES` intent.
+//! Onyxbird's gateway functionality requires you to specify the `GUILD_VOICE_STATES` intent.
 //!
 //! ## Examples
 //! Full examples showing various types of functionality and integrations can be found
 //! in [this crate's examples directory].
 //!
 //! ## Codec support
-//! Songbird supports all [codecs and formats provided by Symphonia] (pure-Rust), with Opus support
+//! Onyxbird supports all [codecs and formats provided by Symphonia] (pure-Rust), with Opus support
 //! provided by [opus2] (an FFI wrapper for libopus).
 //!
-//! **By default, *Songbird will not request any codecs from Symphonia*.** To change this, in your own
+//! **By default, *Onyxbird will not request any codecs from Symphonia*.** To change this, in your own
 //! project you will need to depend on Symphonia as well.
 //!
 //! ```toml
-//! # Including songbird alone gives you support for Opus via the DCA file format.
-//! [dependencies.songbird]
+//! # Including onyxbird alone gives you support for Opus via the DCA file format.
+//! [dependencies.onyxbird]
 //! version = "0.5"
 //! features = ["builtin-queue"]
 //!
@@ -43,7 +43,7 @@
 //!
 //! [serenity]: https://github.com/serenity-rs/serenity
 //! [twilight]: https://github.com/twilight-rs/twilight
-//! [this crate's examples directory]: https://github.com/serenity-rs/songbird/tree/current/examples
+//! [this crate's examples directory]: https://github.com/hxehex/onyxbird/tree/current/examples
 //! [`ConnectionInfo`]: struct@ConnectionInfo
 //! [lavalink]: https://github.com/freyacodes/Lavalink
 //! [codecs and formats provided by Symphonia]: https://github.com/pdeljanov/Symphonia#formats-demuxers

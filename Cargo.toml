@@ -1,15 +1,15 @@
 [package]
 authors = ["Kyle Simpson <kyleandrew.simpson@gmail.com>"]
 description = "An async Rust library for the Discord voice API."
-documentation = "https://docs.rs/songbird"
 edition = "2021"
-homepage = "https://github.com/serenity-rs/songbird"
+homepage = "https://github.com/hxehex/onyxbird"
 include = ["src/**/*.rs", "Cargo.toml", "build.rs"]
 keywords = ["discord", "api", "rtp", "audio"]
 license = "ISC"
-name = "songbird"
+name = "onyxbird"
+publish = false
 readme = "README.md"
-repository = "https://github.com/serenity-rs/songbird.git"
+repository = "https://github.com/hxehex/onyxbird.git"
 rust-version = "1.83.0"
 version = "0.6.0"
 

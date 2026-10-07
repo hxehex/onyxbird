@@ -66,6 +66,7 @@ pub(crate) struct AuxNetwork {
 }
 
 impl AuxNetwork {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         evt_rx: Receiver<WsMessage>,
         ws_client: WsStream,

@@ -33,7 +33,7 @@ use serenity::{
     Result as SerenityResult,
 };
 
-use songbird::{
+use onyxbird::{
     driver::{DecodeConfig, DecodeMode},
     model::{
         id::UserId,
@@ -214,16 +214,16 @@ async fn main() {
 
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
-    // Here, we need to configure Songbird to decode all incoming voice packets.
+    // Here, we need to configure Onyxbird to decode all incoming voice packets.
     // If you want, you can do this on a per-call basis---here, we need it to
     // read the audio data that other people are sending us!
-    let songbird_config =
+    let onyxbird_config =
         Config::default().decode_mode(DecodeMode::Decode(DecodeConfig::default()));
 
     let mut client = Client::builder(&token, intents)
         .event_handler(Handler)
         .framework(framework)
-        .register_songbird_from_config(songbird_config)
+        .register_onyxbird_from_config(onyxbird_config)
         .await
         .expect("Err creating client");
 
@@ -247,9 +247,9 @@ async fn join(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 
     let guild_id = msg.guild_id.unwrap();
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
 
     // Some events relating to voice receive fire *while joining*.
@@ -292,9 +292,9 @@ async fn join(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
 
-    let manager = songbird::get(ctx)
+    let manager = onyxbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .expect("Onyxbird Voice client placed in at initialisation.")
         .clone();
     let has_handler = manager.get(guild_id).is_some();
 

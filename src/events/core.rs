@@ -5,10 +5,10 @@
 /// returns `None`.
 ///
 /// ## Events from other users
-/// Songbird can observe when a user *speaks for the first time* ([`SpeakingStateUpdate`]),
+/// Onyxbird can observe when a user *speaks for the first time* ([`SpeakingStateUpdate`]),
 /// when a client leaves the session ([`ClientDisconnect`]).
 ///
-/// When the `"receive"` feature is enabled, songbird can also handle voice packets
+/// When the `"receive"` feature is enabled, onyxbird can also handle voice packets
 #[cfg_attr(feature = "receive", doc = "([`RtpPacket`](Self::RtpPacket)),")]
 #[cfg_attr(not(feature = "receive"), doc = "(`RtpPacket`),")]
 /// decode and track speaking users

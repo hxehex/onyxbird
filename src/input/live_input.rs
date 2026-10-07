@@ -153,7 +153,7 @@ mod tests {
     #[ntest::timeout(10_000)]
     async fn promote_finds_valid_audio() {
         // Video files often set their default to... the video stream, unsurprisingly.
-        // In these cases we still want to play the attached audio -- this checks that songbird
+        // In these cases we still want to play the attached audio -- this checks that onyxbird
         // finds the audio on a non-default track via `LiveInput::promote`.
         let input = Input::from(File::new(FILE_VID_TARGET));
         input

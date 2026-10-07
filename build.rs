@@ -2,7 +2,7 @@
 compile_error!(
     "You have the `driver` feature enabled: \
     either the `rustls` or `native` feature must be
-    selected to let Songbird's driver use websockets.\n\
+    selected to let Onyxbird's driver use websockets.\n\
     - `rustls` uses Rustls, a pure Rust TLS-implemenation.\n\
     - `native` uses SChannel on Windows, Secure Transport on macOS, \
     and OpenSSL on other platforms.\n\

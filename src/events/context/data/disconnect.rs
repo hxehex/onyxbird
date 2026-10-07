@@ -61,14 +61,14 @@ pub enum DisconnectKind {
 pub enum DisconnectReason {
     /// This (re)connection attempt was dropped due to another request.
     AttemptDiscarded,
-    /// Songbird had an internal error.
+    /// Onyxbird had an internal error.
     ///
     /// This should never happen; if this is ever seen, raise an issue with logs.
     Internal,
     /// A host-specific I/O error caused the fault; this is likely transient, and
     /// should be retried some time later.
     Io,
-    /// Songbird and Discord disagreed on the protocol used to establish a
+    /// Onyxbird and Discord disagreed on the protocol used to establish a
     /// voice connection.
     ///
     /// This should never happen; if this is ever seen, raise an issue with logs.

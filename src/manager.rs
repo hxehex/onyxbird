@@ -42,16 +42,16 @@ struct ClientData {
 ///
 /// [`Call`]: Call
 #[derive(Debug)]
-pub struct Songbird {
+pub struct Onyxbird {
     client_data: OnceLock<ClientData>,
     calls: DashMap<GuildId, Arc<Mutex<Call>>>,
     sharder: Sharder,
     config: PRwLock<Config>,
 }
 
-impl Songbird {
+impl Onyxbird {
     #[cfg(feature = "serenity")]
-    /// Create a new Songbird instance for serenity.
+    /// Create a new Onyxbird instance for serenity.
     ///
     /// This must be [registered] after creation.
     ///
@@ -62,7 +62,7 @@ impl Songbird {
     }
 
     #[cfg(feature = "serenity")]
-    /// Create a new Songbird instance for serenity, using the given configuration.
+    /// Create a new Onyxbird instance for serenity, using the given configuration.
     ///
     /// This must be [registered] after creation.
     ///
@@ -78,13 +78,13 @@ impl Songbird {
     }
 
     #[cfg(feature = "twilight")]
-    /// Create a new Songbird instance for twilight.
+    /// Create a new Onyxbird instance for twilight.
     ///
     /// Twilight handlers do not need to be registered, but
     /// users are responsible for passing in any events using
     /// [`process`].
     ///
-    /// [`process`]: Songbird::process
+    /// [`process`]: Onyxbird::process
     pub fn twilight<U>(cluster: Arc<crate::shards::TwilightMap>, user_id: U) -> Self
     where
         U: Into<UserId>,
@@ -93,13 +93,13 @@ impl Songbird {
     }
 
     #[cfg(feature = "twilight")]
-    /// Create a new Songbird instance for twilight.
+    /// Create a new Onyxbird instance for twilight.
     ///
     /// Twilight handlers do not need to be registered, but
     /// users are responsible for passing in any events using
     /// [`process`].
     ///
-    /// [`process`]: Songbird::process
+    /// [`process`]: Onyxbird::process
     pub fn twilight_from_config<U>(
         sender_map: Arc<crate::shards::TwilightMap>,
         user_id: U,
@@ -225,7 +225,7 @@ impl Songbird {
     /// NOTE: an `Err(..)` value will still create a [`Call`] accessible via [`get`].
     ///
     /// [`Call`]: Call
-    /// [`get`]: Songbird::get
+    /// [`get`]: Onyxbird::get
     /// [`process`]: #method.process
     #[inline]
     pub async fn join<C, G>(&self, guild_id: G, channel_id: C) -> JoinResult<Arc<Mutex<Call>>>
@@ -264,7 +264,7 @@ impl Songbird {
     /// NOTE: an `Err(..)` value will still create a [`Call`] accessible via [`get`].
     ///
     /// [`Call`]: Call
-    /// [`get`]: Songbird::get
+    /// [`get`]: Onyxbird::get
     #[inline]
     pub async fn join_gateway<C, G>(
         &self,
@@ -312,9 +312,9 @@ impl Songbird {
     /// [`leave`] on it.
     ///
     /// [`Call`]: Call
-    /// [`get`]: Songbird::get
+    /// [`get`]: Onyxbird::get
     /// [`leave`]: Call::leave
-    /// [`remove`]: Songbird::remove
+    /// [`remove`]: Onyxbird::remove
     #[inline]
     pub async fn leave<G: Into<GuildId>>(&self, guild_id: G) -> JoinResult<()> {
         self.leave_inner(guild_id.into()).await
@@ -350,7 +350,7 @@ impl Songbird {
     }
 }
 
-impl<'a> IntoIterator for &'a Songbird {
+impl<'a> IntoIterator for &'a Onyxbird {
     type Item = <Iter<'a> as Iterator>::Item;
 
     type IntoIter = Iter<'a>;
@@ -361,7 +361,7 @@ impl<'a> IntoIterator for &'a Songbird {
 }
 
 #[cfg(feature = "twilight")]
-impl Songbird {
+impl Onyxbird {
     /// Handle events received on the cluster.
     ///
     /// When using twilight, you are required to call this with all inbound
@@ -374,8 +374,8 @@ impl Songbird {
     /// Returned futures generally require the inner [`Call`] to be updated via this function,
     /// and will deadlock if event processing is not carried out on another spawned task.
     ///
-    /// [`join`]: Songbird::join
-    /// [`join_gateway`]: Songbird::join_gateway
+    /// [`join`]: Onyxbird::join
+    /// [`join_gateway`]: Onyxbird::join_gateway
     /// [`Call`]: Call
     pub async fn process(&self, event: &TwilightEvent) {
         match event {
@@ -413,19 +413,19 @@ impl Songbird {
 
 #[cfg(feature = "serenity")]
 #[async_trait]
-impl VoiceGatewayManager for Songbird {
+impl VoiceGatewayManager for Onyxbird {
     async fn initialise(&self, shard_count: u32, user_id: SerenityUser) {
         debug!(
-            "Initialising Songbird for Serenity: ID {:?}, {} Shards",
+            "Initialising Onyxbird for Serenity: ID {:?}, {} Shards",
             user_id, shard_count
         );
         self.initialise_client_data(shard_count as u64, user_id);
-        debug!("Songbird ({:?}) Initialised!", user_id);
+        debug!("Onyxbird ({:?}) Initialised!", user_id);
     }
 
     async fn register_shard(&self, shard_id: u32, sender: Sender<ShardRunnerMessage>) {
         debug!(
-            "Registering Serenity shard handle {} with Songbird",
+            "Registering Serenity shard handle {} with Onyxbird",
             shard_id
         );
         self.sharder.register_shard_handle(shard_id, sender);
@@ -434,7 +434,7 @@ impl VoiceGatewayManager for Songbird {
 
     async fn deregister_shard(&self, shard_id: u32) {
         debug!(
-            "Deregistering Serenity shard handle {} with Songbird",
+            "Deregistering Serenity shard handle {} with Onyxbird",
             shard_id
         );
         self.sharder.deregister_shard_handle(shard_id);

@@ -7,7 +7,7 @@ edition = "2021"
 [dependencies]
 reqwest = { workspace = true }
 serenity = { workspace = true }
-songbird = { workspace = true, default-features = true, features = ["builtin-queue"] }
+onyxbird = { workspace = true, default-features = true, features = ["builtin-queue"] }
 symphonia = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

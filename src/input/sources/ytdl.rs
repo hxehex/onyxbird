@@ -267,25 +267,28 @@ mod tests {
     use crate::input::input_tests::*;
 
     #[tokio::test]
+    #[ignore = "requires yt-dlp binary and network access"]
     #[ntest::timeout(20_000)]
     async fn ytdl_track_plays() {
         track_plays_mixed(|| YoutubeDl::new(Client::new(), YTDL_TARGET)).await;
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires yt-dlp binary and network access"]
     #[ntest::timeout(20_000)]
     async fn ytdl_page_with_playlist_plays() {
         track_plays_passthrough(|| YoutubeDl::new(Client::new(), YTDL_PLAYLIST_TARGET)).await;
     }
 
     #[tokio::test]
+    #[ignore = "requires yt-dlp binary and network access"]
     #[ntest::timeout(20_000)]
     async fn ytdl_forward_seek_correct() {
         forward_seek_correct(|| YoutubeDl::new(Client::new(), YTDL_TARGET)).await;
     }
 
     #[tokio::test]
+    #[ignore = "requires yt-dlp binary and network access"]
     #[ntest::timeout(20_000)]
     async fn ytdl_backward_seek_correct() {
         backward_seek_correct(|| YoutubeDl::new(Client::new(), YTDL_TARGET)).await;
@@ -300,7 +303,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires yt-dlp binary and network access"]
     #[ntest::timeout(20_000)]
     async fn ytdl_search_plays() {
         let mut ytdl = YoutubeDl::new_search(Client::new(), "cloudkicker 94 days");
@@ -313,7 +316,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires yt-dlp binary and network access"]
     #[ntest::timeout(20_000)]
     async fn ytdl_search_3() {
         let mut ytdl = YoutubeDl::new_search(Client::new(), "test");

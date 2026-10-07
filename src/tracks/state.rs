@@ -44,6 +44,7 @@ mod tests {
     use reqwest::Client;
 
     #[tokio::test]
+    #[ignore = "requires yt-dlp binary and network access"]
     #[ntest::timeout(10_000)]
     async fn times_unchanged_while_not_ready() {
         let (t_handle, config) = Config::test_cfg(true);

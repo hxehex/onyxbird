@@ -10,7 +10,7 @@ use criterion::{
     Criterion,
 };
 use flume::{Receiver, Sender, TryRecvError};
-use songbird::{
+use onyxbird::{
     constants::*,
     driver::{
         bench_internals::{
