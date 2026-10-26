@@ -4,8 +4,6 @@ use nohash_hasher::{BuildNoHashHasher, IntMap};
 use tokio::time::{Instant as TokInstant, Interval};
 use tracing::info;
 
-use crate::constants::*;
-
 use super::*;
 
 const THREAD_CULL_TIMER: Duration = Duration::from_secs(60);

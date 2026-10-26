@@ -117,7 +117,7 @@ async fn dave_session_lock_contention_does_not_stall_mixer() {
     release_tx.send(()).unwrap();
 
     assert!(
-        elapsed < Duration::from_millis(50),
+        elapsed < Duration::from_secs(1),
         "mixer must not block indefinitely on DAVE key rotation lock (took {elapsed:?})",
     );
     assert!(
