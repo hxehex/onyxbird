@@ -80,7 +80,7 @@ impl PlayoutBuffer {
         // Similar concept to fetch_packet -- if there's a critical desync, and we're unwilling
         // to slot this packet into an empty/stuck buffer then behave as though this packet is the next
         // sequence number we're releasing.
-        let err_threshold = i16::from(config.playout_buffer_length.get() * 5);
+        let err_threshold = i16::from(config.playout_buffer_length.get()) * 5;
         let handling_desync = (self.buffer.is_empty()
             || self.consecutive_store_fails >= (err_threshold as usize))
             && desired_index >= err_threshold;

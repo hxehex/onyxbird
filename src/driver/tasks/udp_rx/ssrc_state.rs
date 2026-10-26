@@ -102,7 +102,18 @@ impl SsrcState {
             // This occurs due to the fallback in 'store_packet' (i.e., empty buffer and massive seq difference).
             // Normal losses should be handled by the below `else` branch.
             let new_seq: u16 = rtp.get_sequence().into();
-            let missed_packets = new_seq.saturating_sub(self.playout_buffer.next_seq().0);
+            // Wrap-safe gap computation, consistent with `store_packet`'s index math:
+            // a plain `u16::saturating_sub` reports 0 missed frames for any loss
+            // spanning the 16-bit sequence rollover, skipping packet-loss
+            // concealment exactly at the wraparound point.
+            let missed_packets = {
+                let diff = (Wrapping(new_seq) - self.playout_buffer.next_seq()).0;
+                if diff >= 0x8000 {
+                    0
+                } else {
+                    diff
+                }
+            };
 
             // TODO: maybe hand over audio and extension indices alongside packet?
             let (audio, _packet_size) = self.scan_and_decode(
@@ -140,12 +151,19 @@ impl SsrcState {
         decode: bool,
     ) -> Result<(Option<Vec<i16>>, usize)> {
         let start = if extension {
-            RtpExtensionPacket::new(data)
+            let start = RtpExtensionPacket::new(data)
                 .map(|pkt| pkt.packet_size())
-                .ok_or(Error::IllegalVoicePacket)
+                .ok_or(Error::IllegalVoicePacket)?;
+            // `packet_size()` is derived from the *declared* word count in the
+            // extension header, which can exceed the actual packet contents on
+            // a malformed packet. Never let that value reach the slice below.
+            if start > data.len() {
+                return Err(Error::IllegalVoicePacket);
+            }
+            start
         } else {
-            Ok(0)
-        }?;
+            0
+        };
 
         let pkt = if decode {
             let mut out = vec![0; self.decode_size.len()];

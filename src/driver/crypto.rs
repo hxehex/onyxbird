@@ -412,9 +412,15 @@ impl Cipher {
         // Update the start estimate to account for bytes occupied by extension headers.
         let payload_offset = if has_extension {
             let payload = packet.payload();
-            let extension =
-                RtpExtensionPacket::new(payload).ok_or(InternalError::IllegalVoicePacket)?;
-            extension.packet().len() - extension.payload().len()
+            // `RtpExtensionPacket::packet_size()`/`payload()` trust the
+            // extension's *declared* word count, which can exceed the packet
+            // contents on a malformed packet and panic inside the accessor.
+            // Compute the (bounded) offset from the header directly instead.
+            if payload.len() < 4 {
+                return Err(InternalError::IllegalVoicePacket);
+            }
+            let words = u16::from_be_bytes([payload[2], payload[3]]) as usize;
+            (4 + words * 4).min(payload.len())
         } else {
             0
         };

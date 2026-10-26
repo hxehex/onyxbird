@@ -171,13 +171,21 @@ impl UdpRx {
 
                 let mut packet_data = if self.config.decode_mode.should_decrypt() {
                     let out = self.cipher.decrypt_rtp_in_place(&mut rtp).map(|(s, t)| {
-                        if rtp.get_padding() != 0 {
-                            let payload = rtp.payload();
-                            let padding_count = payload[payload.len() - t - 1] as usize;
-                            (s, t + padding_count, true)
+                        let padding_count = if rtp.get_padding() != 0 {
+                            // The count byte sits immediately before the crypto
+                            // suffix. On a malformed packet whose payload is no
+                            // longer than the suffix itself, the index below
+                            // would underflow -- treat it as zero padding
+                            // rather than panicking the receive task.
+                            rtp.payload()
+                                .len()
+                                .checked_sub(t + 1)
+                                .and_then(|i| rtp.payload().get(i).map(|b| usize::from(*b)))
+                                .unwrap_or(0)
                         } else {
-                            (s, t, true)
-                        }
+                            0
+                        };
+                        (s, t + padding_count, true)
                     });
 
                     if let Err(ref e) = out {
@@ -220,19 +228,32 @@ impl UdpRx {
                             let mut decrypted_successfully = false;
 
                             if let Some(user_id) = self.ssrc_signalling.ssrc_user_map.get(&ssrc) {
-                                if let Some(ref mut dave_session) =
-                                    *self.dave_session.write().unwrap()
-                                {
-                                    if dave_session.is_ready() {
-                                        if let Ok(decrypted_body) = dave_session.decrypt(
+                                // Recover from a poisoned lock rather than
+                                // unwrapping: if a prior DAVE decrypt panicked
+                                // while holding the lock, unwrapping here
+                                // would permanently kill the receive task.
+                                let mut dave_session = self
+                                    .dave_session
+                                    .write()
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+                                if let Some(ref mut session) = *dave_session {
+                                    if session.is_ready() {
+                                        if let Ok(decrypted_body) = session.decrypt(
                                             user_id.0,
                                             davey::MediaType::AUDIO,
                                             body,
                                         ) {
-                                            shrinkage = body.len() - decrypted_body.len();
-                                            body[..decrypted_body.len()]
-                                                .copy_from_slice(&decrypted_body);
-                                            decrypted_successfully = true;
+                                            // A decrypt result larger than its
+                                            // ciphertext would underflow the
+                                            // shrinkage math below -- drop the
+                                            // packet instead of panicking.
+                                            if decrypted_body.len() <= body.len() {
+                                                shrinkage = body.len() - decrypted_body.len();
+                                                body[..decrypted_body.len()]
+                                                    .copy_from_slice(&decrypted_body);
+                                                decrypted_successfully = true;
+                                            }
                                         }
                                     }
                                 }
