@@ -13,6 +13,8 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 - Docs: switch `doc_auto_cfg` to `doc_cfg` for docs.rs builds. ([5d461855])
+- Bump crate version to 0.6.1 to match the upstream patch release — its only
+  change (the `doc_cfg` switch above) was already present in this tree.
 - Remove project logo and upstream badges/links. ([0031c82d])
 - Rename the crate and public API for onyxbird (`Onyxbird`, `OnyxbirdKey`,
   `register_onyxbird*`), updating docs, examples, and benches. ([e0148727])

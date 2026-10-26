@@ -26,7 +26,7 @@ project you will need to depend on Symphonia as well.
 ```toml
 # Including onyxbird alone gives you support for Opus via the DCA file format.
 [dependencies.onyxbird]
-version = "0.5"
+version = "0.6"
 features = ["builtin-queue"]
 
 # To get additional codecs, you *must* add Symphonia yourself.
