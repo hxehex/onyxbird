@@ -76,7 +76,10 @@ impl<A: MediaSource> Seek for RawAdapter<A> {
             let out = if target_pos as usize <= self.prepend.len() {
                 self.inner.rewind().map(|()| 0)
             } else {
-                self.inner.seek(SeekFrom::Start(target_pos))
+                // The virtual stream is [prepend][inner]: translate the
+                // target position into the inner stream's coordinates.
+                self.inner
+                    .seek(SeekFrom::Start(target_pos - self.prepend.len() as u64))
             };
 
             match out {

@@ -21,7 +21,12 @@ pub struct ChildContainer(pub Vec<Child>);
 impl Read for ChildContainer {
     fn read(&mut self, buffer: &mut [u8]) -> IoResult<usize> {
         match self.0.last_mut() {
-            Some(ref mut child) => child.stdout.as_mut().unwrap().read(buffer),
+            // A child spawned without piped stdout would otherwise panic on
+            // the audio thread: treat it as an ended stream.
+            Some(ref mut child) => match child.stdout.as_mut() {
+                Some(stdout) => stdout.read(buffer),
+                None => Ok(0),
+            },
             None => Ok(0),
         }
     }

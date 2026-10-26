@@ -88,7 +88,12 @@ impl AuxNetwork {
             dont_send: false,
 
             ssrc,
-            heartbeat_interval: Duration::from_secs_f64(heartbeat_interval / 1000.0),
+            // The gateway controls this value: a hostile or malformed HELLO
+            // (negative / NaN / huge) would panic the connection task on
+            // every reconnect attempt. Clamp to a sane range instead.
+            heartbeat_interval: Duration::from_secs_f64(
+                (heartbeat_interval / 1000.0).clamp(0.0, 600.0),
+            ),
 
             speaking: SpeakingState::empty(),
             last_heartbeat_nonce: None,
@@ -146,7 +151,8 @@ impl AuxNetwork {
                             *interconnect = i;
                         },
                         Ok(WsMessage::SetKeepalive(keepalive)) => {
-                            self.heartbeat_interval = Duration::from_secs_f64(keepalive / 1000.0);
+                            self.heartbeat_interval =
+                                Duration::from_secs_f64((keepalive / 1000.0).clamp(0.0, 600.0));
                             next_heartbeat = self.next_heartbeat();
                         },
                         Ok(WsMessage::Speaking(is_speaking)) => {
@@ -305,7 +311,11 @@ impl AuxNetwork {
                 if ev.transition_id == 0 {
                     self.execute_dave_transition(ev.transition_id);
                 } else if ev.protocol_version == 0 {
-                    if let Some(ref mut dave_session) = *self.dave_session.write().unwrap() {
+                    if let Some(ref mut dave_session) = *self
+                        .dave_session
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    {
                         dave_session.set_passthrough_mode(true, Some(120));
                     }
 
@@ -332,7 +342,11 @@ impl AuxNetwork {
                 }
             },
             GatewayEvent::DaveMlsExternalSender(ev) => {
-                if let Some(ref mut dave_session) = *self.dave_session.write().unwrap() {
+                if let Some(ref mut dave_session) = *self
+                    .dave_session
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                {
                     if let Err(e) = dave_session.set_external_sender(&ev.external_sender) {
                         warn!(error = ?e, "error setting MLS external sender");
                     }
@@ -343,7 +357,10 @@ impl AuxNetwork {
                     DaveMlsProposalsOperationType::Append => davey::ProposalsOperationType::APPEND,
                     DaveMlsProposalsOperationType::Revoke => davey::ProposalsOperationType::REVOKE,
                 };
-                let result = if let Some(ref mut dave_session) = *self.dave_session.write().unwrap()
+                let result = if let Some(ref mut dave_session) = *self
+                    .dave_session
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                 {
                     match dave_session.process_proposals(
                         operation_type,
@@ -450,7 +467,10 @@ impl AuxNetwork {
         &mut self,
         commit_message: &[u8],
     ) -> Option<Result<(), davey::errors::ProcessCommitError>> {
-        let mut dave_session_lock = self.dave_session.write().unwrap();
+        let mut dave_session_lock = self
+            .dave_session
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dave_session = (*dave_session_lock).as_mut()?;
 
         Some(dave_session.process_commit(commit_message))
@@ -460,7 +480,10 @@ impl AuxNetwork {
         &mut self,
         welcome: &[u8],
     ) -> Option<Result<(), davey::errors::ProcessWelcomeError>> {
-        let mut dave_session_lock = self.dave_session.write().unwrap();
+        let mut dave_session_lock = self
+            .dave_session
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dave_session = (*dave_session_lock).as_mut()?;
 
         Some(dave_session.process_welcome(welcome))
@@ -473,26 +496,36 @@ impl AuxNetwork {
             let user_id = self.info.user_id.0.into();
             let channel_id = self.info.channel_id.0.into();
 
-            let key_package =
-                if let Some(ref mut dave_session) = *self.dave_session.write().unwrap() {
-                    dave_session.reinit(dave_protocol_version, user_id, channel_id, None)?;
-                    dave_session.create_key_package()?
-                } else {
-                    let mut dave_session =
-                        davey::DaveSession::new(dave_protocol_version, user_id, channel_id, None)?;
-                    let key_package = dave_session.create_key_package()?;
+            let key_package = if let Some(ref mut dave_session) = *self
+                .dave_session
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+            {
+                dave_session.reinit(dave_protocol_version, user_id, channel_id, None)?;
+                dave_session.create_key_package()?
+            } else {
+                let mut dave_session =
+                    davey::DaveSession::new(dave_protocol_version, user_id, channel_id, None)?;
+                let key_package = dave_session.create_key_package()?;
 
-                    *self.dave_session.write().unwrap() = Some(dave_session);
+                *self
+                    .dave_session
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(dave_session);
 
-                    key_package
-                };
+                key_package
+            };
 
             self.ws_client
                 .send_binary(&GatewayEvent::DaveMlsKeyPackage(DaveMlsKeyPackage {
                     key_package,
                 }))
                 .await?;
-        } else if let Some(ref mut dave_session) = *self.dave_session.write().unwrap() {
+        } else if let Some(ref mut dave_session) = *self
+            .dave_session
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
             dave_session.reset()?;
             dave_session.set_passthrough_mode(true, Some(10));
         }
@@ -512,7 +545,11 @@ impl AuxNetwork {
 
         // Upgraded from transport-only encryption
         if transition_id > 0 && old_version == 0 && new_version != 0 {
-            if let Some(ref mut dave_session) = *self.dave_session.write().unwrap() {
+            if let Some(ref mut dave_session) = *self
+                .dave_session
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+            {
                 dave_session.set_passthrough_mode(true, Some(10));
             }
         }

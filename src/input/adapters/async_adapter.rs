@@ -254,7 +254,7 @@ impl Read for AsyncAdapterStream {
                     self.check_dropped()?;
                 },
                 a => {
-                    println!("Misc err {a:?}");
+                    tracing::warn!("Misc err {a:?}");
                     return a;
                 },
             }

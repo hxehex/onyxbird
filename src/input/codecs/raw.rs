@@ -54,6 +54,16 @@ impl FormatReader for RawReader {
         let sample_rate = source.read_u32()?;
         let n_chans = source.read_u32()?;
 
+        // A rate below 50 Hz would yield zero-byte packets (stalling the
+        // mixer loop indefinitely), a zero rate would divide by zero in
+        // seek, and an absurdly large rate would attempt enormous per-packet
+        // allocations: reject all of those up front.
+        if !(50..=1_000_000).contains(&sample_rate) {
+            return symph_err::decode_error(
+                "rawf32: sample rate is outside the supported range (50 Hz ..= 1 MHz).",
+            );
+        }
+
         let chans = match n_chans {
             1 => Channels::FRONT_LEFT,
             2 => Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
