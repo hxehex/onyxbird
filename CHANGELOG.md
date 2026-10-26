@@ -10,6 +10,15 @@ All notable changes to this project are documented in this file.
   restoring audio reception on servers with E2EE enabled. ([6d2b96fe])
 - **Driver/UDP Rx**: Guard against truncated RTP packets in `udp_rx`, which
   previously caused a panic. ([57b0d322])
+- Full audit pass over the mixer, scheduler, receive, input, and connection
+  paths (2026-10): eliminated panic paths reachable from malformed packets
+  and hi-res/multichannel/zero-rate sources, fixed a mute-tick accumulation
+  bug (unbounded pop on unmute), fixed a mixer/event-thread index desync when
+  two or more tracks finish in the same tick (stalled `TrackQueue`), fixed
+  RTP-timestamp adjustment after park/reactivate, fixed `RawAdapter` seek
+  landing 16 bytes off, recovered DAVE session locks from poisoning instead
+  of panicking, and removed a per-tick heap allocation in the resampling
+  fast path. ([f9181f13] [3367d52a] [b58cc859])
 
 ### Changed
 - Docs: switch `doc_auto_cfg` to `doc_cfg` for docs.rs builds. ([5d461855])
@@ -27,6 +36,9 @@ repository's git history (`git log`).
 
 [6d2b96fe]: https://github.com/hxehex/onyxbird/commit/6d2b96fe
 [57b0d322]: https://github.com/hxehex/onyxbird/commit/57b0d322
+[f9181f13]: https://github.com/hxehex/onyxbird/commit/f9181f13
+[3367d52a]: https://github.com/hxehex/onyxbird/commit/3367d52a
+[b58cc859]: https://github.com/hxehex/onyxbird/commit/b58cc859
 [5d461855]: https://github.com/hxehex/onyxbird/commit/5d461855
 [0031c82d]: https://github.com/hxehex/onyxbird/commit/0031c82d
 [e0148727]: https://github.com/hxehex/onyxbird/commit/e0148727
