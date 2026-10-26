@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-**Songbird version:** (version)
+**Onyxbird version:** (version)
 
 **Rust version (`rustc -V`):** (version)
 

@@ -1,14 +1,14 @@
 # Summary
-Songbird defines two main systems:
+Onyxbird defines two main systems:
 * The **gateway**, which communicates with Discord through another client library. This sends voice state updates to join a voice channel, and correlates responses into voice connection info.
 * The **driver**, which uses voice connection info to establish an RTP connection and WS signalling channel to send and receive audio. It then manages audio mixing, audio source management, event tracking, and voice packet reception.
 
-Songbird allows users to use one or both of these systems as needed.
+Onyxbird allows users to use one or both of these systems as needed.
 Discord voice connections ultimately require both of these to be handled in some way.
 In many setups for instance, this comes through using a client-specific wrapper in a bot's host language to collect connection information to send to Lavalink/Lavaplayer, hosted on the JVM.
 
 # Gateway
-Songbird's **gateway** is an async system, typically managed by a top-level `Songbird` struct, which holds `Arc` pointers to a Discord client library instance (that it can request individual shard references from).
+Onyxbird's **gateway** is an async system, typically managed by a top-level `Onyxbird` struct, which holds `Arc` pointers to a Discord client library instance (that it can request individual shard references from).
 This maps all `ChannelID`s into `Call` state.
 New `Call`s are created as needed, requesting the shard that each `ChannelID` belongs to from the main client.
 
@@ -25,14 +25,14 @@ src/join.rs
 ```
 
 # Driver
-Songbird's **driver** is a mixed sync/async system for running voice connections.
+Onyxbird's **driver** is a mixed sync/async system for running voice connections.
 Audio processing remains synchronous for the following reasons:
 * Encryption, encoding, and mixing are compute bound tasks which cannot be subdivided cleanly by the Tokio executor. Having these block the scheduler's finite thread count has a significant impact on servicing other tasks.
 * `Read` and `Seek` are considerably more user-friendly to use, implement, and integrate than `AsyncRead`, `AsyncBufRead`, and `AsyncSeek`.
 * Symphonia implements all of its functionality based on synchronous I/O.
 
 ## Tasks
-Songbird subdivides voice connection handling into several long- and short-lived tasks.
+Onyxbird subdivides voice connection handling into several long- and short-lived tasks.
 
 * **Core**: Handles and directs commands received from the driver. Responsible for connection/reconnection, and creates network tasks.
 * **Mixer**: Combines audio sources together, Opus encodes the result, and encrypts the built packets every 20ms. Responsible for handling track commands/state, and transmitting completed voice packets and keepalive messages. ***Synchronous when live***.
@@ -47,7 +47,7 @@ Songbird subdivides voice connection handling into several long- and short-lived
 ![](images/driver.png)
 
 ## Scheduler
-To save threads and memory (e.g., packet buffer allocations), Songbird parks Mixer tasks which do not have any live Tracks.
+To save threads and memory (e.g., packet buffer allocations), Onyxbird parks Mixer tasks which do not have any live Tracks.
 These are all co-located on a single async task.
 This task is responsible for managing UDP keepalive messages for each task, maintaining event state, and executing any Mixer task messages.
 Whenever any message arrives which adds a `Track`, the mixer task is moved to a live thread.
@@ -87,7 +87,7 @@ Inputs are audio sources supporting lazy initialisation, being either:
 Several wrappers exist to add `Seek` capabilities to one-way streams via storage or explicitly recreating the struct, `AsyncRead` adapters, and raw audio input adapters.
 
 Internally, the mixer uses floating-point audio to prevent clipping and allow more granular volume control.
-Symphonia is used to demux and decode input files in a variety of formats into this floating-point buffer: songbird supports all codecs and containers which are part of the symphonia project, while adding support for Opus decoding and DCA1 container files.
+Symphonia is used to demux and decode input files in a variety of formats into this floating-point buffer: onyxbird supports all codecs and containers which are part of the symphonia project, while adding support for Opus decoding and DCA1 container files.
 If a source uses the Opus codec (and is the only source), then it can bypass mixing and re-encoding altogether, saving CPU cycles per server.
 
 ```
