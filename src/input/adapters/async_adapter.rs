@@ -18,6 +18,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    time::Duration,
 };
 use symphonia_core::io::MediaSource;
 use tokio::{
@@ -189,9 +190,15 @@ impl AsyncAdapterStream {
     }
 
     fn handle_messages(&self, op: Operation) -> Option<AdapterResponse> {
+        let timeout = match op {
+            Operation::Read { block: true } => Duration::from_millis(500),
+            Operation::Seek | Operation::Len => Duration::from_secs(5),
+            Operation::Read { block: false } => Duration::ZERO,
+        };
+
         loop {
             let msg = if op.will_block() {
-                self.resp_rx.recv().ok()
+                self.resp_rx.recv_timeout(timeout).ok()
             } else {
                 self.resp_rx.try_recv().ok()
             };
@@ -233,10 +240,11 @@ impl AsyncAdapterStream {
 
 impl Read for AsyncAdapterStream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        let mut stall_count = 0;
         loop {
             let block = !(self.bytes_known_present.load(Ordering::Relaxed)
                 || self.finalised.load(Ordering::Relaxed));
-            drop(self.handle_messages(Operation::Read { block }));
+            let msg = self.handle_messages(Operation::Read { block });
 
             let mut rb = self.bytes_out.lock();
             match rb.read(buf) {
@@ -252,6 +260,17 @@ impl Read for AsyncAdapterStream {
                     }
                     self.bytes_known_present.store(false, Ordering::Relaxed);
                     self.check_dropped()?;
+
+                    if msg.is_none() && block {
+                        stall_count += 1;
+                        if stall_count >= 4 {
+                            // Stalled for 4 x 500ms = 2s with an empty ring buffer.
+                            return Err(IoError::new(
+                                IoErrorKind::TimedOut,
+                                "async media stream read timed out: network stall",
+                            ));
+                        }
+                    }
                 },
                 a => {
                     tracing::warn!("Misc err {a:?}");
@@ -280,8 +299,14 @@ impl Seek for AsyncAdapterStream {
         self.finalised.store(false, Ordering::Relaxed);
         match self.handle_messages(Operation::Seek) {
             Some(AdapterResponse::SeekClear) => {},
-            None => self.check_dropped().map(|()| unreachable!())?,
-            _ => unreachable!(),
+            _ => {
+                return Err(self.check_dropped().err().unwrap_or_else(|| {
+                    IoError::new(
+                        IoErrorKind::TimedOut,
+                        "Async seek timed out waiting for stream clear",
+                    )
+                }));
+            },
         }
 
         let mut rb = self.bytes_out.lock();
@@ -292,8 +317,12 @@ impl Seek for AsyncAdapterStream {
 
         match self.handle_messages(Operation::Seek) {
             Some(AdapterResponse::SeekResult(a)) => a,
-            None => self.check_dropped().map(|()| unreachable!()),
-            _ => unreachable!(),
+            _ => Err(self.check_dropped().err().unwrap_or_else(|| {
+                IoError::new(
+                    IoErrorKind::TimedOut,
+                    "Async seek timed out waiting for result",
+                )
+            })),
         }
     }
 }
@@ -310,8 +339,7 @@ impl MediaSource for AsyncAdapterStream {
 
         match self.handle_messages(Operation::Len) {
             Some(AdapterResponse::ByteLen(a)) => a,
-            None => self.check_dropped().ok().map(|()| unreachable!()),
-            _ => unreachable!(),
+            _ => None,
         }
     }
 }
