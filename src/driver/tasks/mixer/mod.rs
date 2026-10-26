@@ -463,29 +463,45 @@ impl Mixer {
             }
         }
 
+        // Fire all state changes for finished tracks *before* removing any of
+        // them, and remove in descending index order. The event thread's
+        // per-track lists only apply removals when it processes the `Tick`
+        // message below, so its layout still matches this one here: indices
+        // sent mid-pass must refer to the pre-removal layout. Firing per
+        // removal with post-`swap_remove` indices collides when two or more
+        // tracks finish in the same pass, permanently desynchronising both
+        // threads (wrong events, leaked handles, and a stalled `TrackQueue`).
+        let mut done_tracks = Vec::new();
         let mut i = 0;
         while i < self.tracks.len() {
             let track = self
                 .tracks
-                .get_mut(i)
+                .get(i)
                 .expect("Tried to remove an illegal track index.");
 
             if track.playing.is_done() {
-                let p_state = track.playing.clone();
-                let to_drop = self.tracks.swap_remove(i);
-                self.disposer
-                    .dispose(DisposalMessage::Track(Box::new(to_drop)));
-
-                let to_drop = self.track_handles.swap_remove(i);
-                self.disposer.dispose(DisposalMessage::Handle(to_drop));
-
-                self.fire_event(EventMessage::ChangeState(
-                    i,
-                    TrackStateChange::Mode(p_state),
-                ))?;
-            } else {
-                i += 1;
+                done_tracks.push((i, track.playing.clone()));
             }
+            i += 1;
+        }
+
+        for (idx, p_state) in &done_tracks {
+            self.fire_event(EventMessage::ChangeState(
+                *idx,
+                TrackStateChange::Mode(p_state.clone()),
+            ))?;
+        }
+
+        // Descending order keeps every collected index valid for the whole
+        // pass (`swap_remove` only disturbs positions at/after the removed
+        // index).
+        for (idx, _) in done_tracks.iter().rev() {
+            let to_drop = self.tracks.swap_remove(*idx);
+            self.disposer
+                .dispose(DisposalMessage::Track(Box::new(to_drop)));
+
+            let to_drop = self.track_handles.swap_remove(*idx);
+            self.disposer.dispose(DisposalMessage::Handle(to_drop));
         }
 
         // Tick -- receive side also handles removals in same manner after it increments
@@ -526,13 +542,28 @@ impl Mixer {
 
         // Walk over all the audio files, combining into one audio frame according
         // to volume, play state, etc.
-        let mut mix_len = {
+        let (mut mix_len, mixed_audio) = {
             let out = self.mix_tracks(packet);
+
+            // Record whether this tick actually wrote audio into the mix
+            // planes *before* muting is applied. `AudioBuffer::clear()` only
+            // resets the frame count -- it does not zero plane data -- so if
+            // the zeroing below is skipped while muted (or on the silence
+            // early-return), every tick adds onto the previous sum, and the
+            // first unmuted frame plays back at an unbounded magnitude.
+            let mixed_audio = matches!(out, MixType::MixedPcm(a) if a > 0);
 
             self.sample_buffer.copy_interleaved_typed(&self.symph_mix);
 
-            out
+            (out, mixed_audio)
         };
+
+        // Zero out all planes of the mix buffer if any audio was written.
+        if mixed_audio {
+            for plane in self.symph_mix.planes_mut().planes() {
+                plane.fill(0.0);
+            }
+        }
 
         if self.muted {
             mix_len = MixType::MixedPcm(0);
@@ -605,13 +636,6 @@ impl Mixer {
         #[cfg(not(test))]
         let out = self.prep_packet(mix_len, packet);
 
-        // Zero out all planes of the mix buffer if any audio was written.
-        if matches!(mix_len, MixType::MixedPcm(a) if a > 0) {
-            for plane in self.symph_mix.planes_mut().planes() {
-                plane.fill(0.0);
-            }
-        }
-
         out
     }
 
@@ -645,17 +669,33 @@ impl Mixer {
         };
 
         if conn.dave_protocol_version.load(Ordering::Relaxed) != 0 {
-            if let Some(ref mut dave_session) = *conn.dave_session.write().unwrap() {
-                if dave_session.is_ready() {
-                    let encrypted = dave_session
+            // Recover from a poisoned lock rather than unwrapping: a panic
+            // inside a prior encrypt would otherwise kill this worker thread
+            // on every subsequent tick.
+            let mut dave_session = conn
+                .dave_session
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+            if let Some(ref mut session) = *dave_session {
+                if session.is_ready() {
+                    let encrypted = session
                         .encrypt_opus(
                             &payload[first_payload_byte..first_payload_byte + payload_len],
                         )?
                         .into_owned();
-                    payload_len = encrypted.len();
 
-                    payload[first_payload_byte..first_payload_byte + payload_len]
-                        .copy_from_slice(&encrypted);
+                    // DAVE framing adds ~24 bytes over the plaintext frame.
+                    // Fail the tick if it cannot fit rather than panicking
+                    // on the slice below.
+                    if encrypted.len() <= payload.len() - first_payload_byte {
+                        payload_len = encrypted.len();
+
+                        payload[first_payload_byte..first_payload_byte + payload_len]
+                            .copy_from_slice(&encrypted);
+                    } else {
+                        return Err(Error::DaveEncrypt);
+                    }
                 }
             }
         }
@@ -763,7 +803,12 @@ impl Mixer {
                 (Blame: VOICE_PACKET_MAX?)",
         );
         let payload = rtp.payload_mut();
-        let opus_frame = &mut payload[self.crypto_mode().payload_prefix_len()..];
+        let crypto_mode = self.crypto_mode();
+        // The crypto suffix (nonce + tag) occupies the tail of the payload:
+        // bound the passthrough slot to the audio space so that a frame can
+        // never be admitted at a size `write_packet_nonce` couldn't encrypt.
+        let opus_end = payload.len() - crypto_mode.payload_suffix_len();
+        let opus_frame = &mut payload[crypto_mode.payload_prefix_len()..opus_end];
 
         // Opus frame passthrough.
         // This requires that we have only one PLAYING track, who has volume 1.0, and an

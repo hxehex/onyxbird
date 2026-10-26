@@ -495,7 +495,7 @@ impl Live {
     fn add_task(&mut self, task: ParkedMixer, id: TaskId, activation_time: Instant) {
         let idx = self.ids.len();
 
-        let elapsed = task.park_time - activation_time;
+        let elapsed = activation_time - task.park_time;
 
         let samples_f64 = elapsed.as_secs_f64() * (SAMPLE_RATE_RAW as f64);
         let mod_samples = (samples_f64 as u64) as u32;
