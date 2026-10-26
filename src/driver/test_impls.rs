@@ -16,11 +16,12 @@ use crate::{
     tracks::LoopState,
 };
 use flume::Receiver;
+use parking_lot::RwLock;
 use std::{
     io::Cursor,
     net::UdpSocket,
     num::NonZeroU16,
-    sync::{atomic::AtomicU16, Arc, RwLock},
+    sync::{atomic::AtomicU16, Arc},
 };
 use tokio::runtime::Handle;
 

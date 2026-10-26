@@ -81,6 +81,69 @@ async fn simultaneous_removals_preserve_event_identity() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dave_session_lock_contention_does_not_stall_mixer() {
+    let (mut mixer, _listeners) = Mixer::mock(Handle::current(), false);
+    // Ensure DAVE protocol version is active
+    mixer
+        .conn_active
+        .as_ref()
+        .unwrap()
+        .dave_protocol_version
+        .store(davey::DAVE_PROTOCOL_VERSION, Ordering::Relaxed);
+
+    let dave_session = mixer.conn_active.as_ref().unwrap().dave_session.clone();
+
+    // Spawn a thread that holds the write lock (simulating a long-running MLS commit / welcome)
+    let (locked_tx, locked_rx) = flume::bounded(1);
+    let (release_tx, release_rx) = flume::bounded(1);
+    std::thread::spawn(move || {
+        let _guard = dave_session.write();
+        locked_tx.send(()).unwrap();
+        release_rx.recv().unwrap();
+    });
+
+    // Wait until the background thread holds the lock
+    locked_rx.recv().unwrap();
+
+    // Now mix and build packet on the mixer thread.
+    // Before this fix, this would block indefinitely until release_rx was triggered!
+    let start = std::time::Instant::now();
+    let mut packet = [0; VOICE_PACKET_MAX];
+    let cipher = mixer.conn_active.as_ref().unwrap().cipher.clone();
+    let res = mixer.prep_packet(MixType::Passthrough(100), &mut packet);
+    let elapsed = start.elapsed();
+
+    // Release the background lock
+    release_tx.send(()).unwrap();
+
+    assert!(
+        elapsed < Duration::from_millis(50),
+        "mixer must not block indefinitely on DAVE key rotation lock (took {elapsed:?})",
+    );
+    assert!(
+        res.is_ok(),
+        "mixer must successfully emit comfort silence rather than failing"
+    );
+
+    // Verify returned length matches comfort silence packet (RTP header + prefix + SILENT_FRAME + suffix)
+    let prefix = mixer.crypto_mode().payload_prefix_len();
+    let expected_len = RtpPacket::minimum_packet_size()
+        + prefix
+        + SILENT_FRAME.len()
+        + mixer.crypto_mode().payload_suffix_len();
+    assert_eq!(res.unwrap(), expected_len);
+
+    // Verify decrypted packet payload is SILENT_FRAME
+    let mut mutable_rtp = MutableRtpPacket::new(&mut packet[..expected_len]).unwrap();
+    let (offset, end) = cipher.decrypt_rtp_in_place(&mut mutable_rtp).unwrap();
+    let decrypted_payload = mutable_rtp.payload();
+    assert_eq!(
+        &decrypted_payload[offset..decrypted_payload.len() - end],
+        &SILENT_FRAME
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn muted_ticks_do_not_accumulate_pcm() {
     let (mut mixer, _listeners) = Mixer::mock(Handle::current(), false);
     let (output, _rx) = flume::unbounded();

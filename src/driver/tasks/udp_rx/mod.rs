@@ -19,10 +19,8 @@ use discortp::{
 };
 use discortp::{MutablePacket, Packet};
 use flume::Receiver;
-use std::sync::{
-    atomic::{AtomicU16, Ordering},
-    RwLock,
-};
+use parking_lot::RwLock;
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::{
     collections::{HashMap, HashSet},
     num::Wrapping,
@@ -237,34 +235,36 @@ impl UdpRx {
                             let mut decrypted_successfully = false;
 
                             if let Some(user_id) = self.ssrc_signalling.ssrc_user_map.get(&ssrc) {
-                                // Recover from a poisoned lock rather than
-                                // unwrapping: if a prior DAVE decrypt panicked
-                                // while holding the lock, unwrapping here
-                                // would permanently kill the receive task.
-                                let mut dave_session = self
-                                    .dave_session
-                                    .write()
-                                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                                // Bounded lock acquisition: during MLS transitions, avoid
+                                // blocking the UDP receive loop for tens of milliseconds.
+                                let mut dave_session =
+                                    self.dave_session.try_write_for(Duration::from_millis(2));
 
-                                if let Some(ref mut session) = *dave_session {
-                                    if session.is_ready() {
-                                        if let Ok(decrypted_body) = session.decrypt(
-                                            user_id.0,
-                                            davey::MediaType::AUDIO,
-                                            body,
-                                        ) {
-                                            // A decrypt result larger than its
-                                            // ciphertext would underflow the
-                                            // shrinkage math below -- drop the
-                                            // packet instead of panicking.
-                                            if decrypted_body.len() <= body.len() {
-                                                shrinkage = body.len() - decrypted_body.len();
-                                                body[..decrypted_body.len()]
-                                                    .copy_from_slice(&decrypted_body);
-                                                decrypted_successfully = true;
+                                if let Some(ref mut session_guard) = dave_session {
+                                    if let Some(ref mut session) = **session_guard {
+                                        if session.is_ready() {
+                                            if let Ok(decrypted_body) = session.decrypt(
+                                                user_id.0,
+                                                davey::MediaType::AUDIO,
+                                                body,
+                                            ) {
+                                                // A decrypt result larger than its
+                                                // ciphertext would underflow the
+                                                // shrinkage math below -- drop the
+                                                // packet instead of panicking.
+                                                if decrypted_body.len() <= body.len() {
+                                                    shrinkage = body.len() - decrypted_body.len();
+                                                    body[..decrypted_body.len()]
+                                                        .copy_from_slice(&decrypted_body);
+                                                    decrypted_successfully = true;
+                                                }
                                             }
                                         }
                                     }
+                                } else {
+                                    trace!(
+                                        "DAVE session lock contended in udp_rx during key rotation"
+                                    );
                                 }
                             }
 

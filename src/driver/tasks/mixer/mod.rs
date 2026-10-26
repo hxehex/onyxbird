@@ -50,7 +50,7 @@ use symphonia_core::{
     units::Time,
 };
 use tokio::runtime::Handle;
-use tracing::error;
+use tracing::{error, trace};
 
 #[cfg(test)]
 use crate::driver::test_config::{OutputMessage, OutputMode};
@@ -682,29 +682,40 @@ impl Mixer {
         }
 
         if conn.dave_protocol_version.load(Ordering::Relaxed) != 0 {
-            // Recover from a poisoned lock rather than unwrapping: a panic
-            // inside a prior encrypt would otherwise kill this worker thread
-            // on every subsequent tick.
-            let mut dave_session = conn
-                .dave_session
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // Under normal operation, DAVE encrypt takes ~10µs.
+            // During MLS key rotation (users joining/leaving), the WS task
+            // runs OpenMLS operations that can take tens of milliseconds.
+            // Bounding our lock acquisition to 2ms ensures the real-time audio
+            // thread never blocks across an entire MLS transition, preserving
+            // the 20ms cadence for all calls on this worker.
+            let dave_session = conn.dave_session.try_write_for(Duration::from_millis(2));
 
-            if let Some(ref mut session) = *dave_session {
-                if session.is_ready() {
-                    let encrypted = session
-                        .encrypt_opus(
-                            &payload[first_payload_byte..first_payload_byte + payload_len],
-                        )?
-                        .into_owned();
+            if let Some(mut session_guard) = dave_session {
+                if let Some(ref mut session) = *session_guard {
+                    if session.is_ready() {
+                        let encrypted = session
+                            .encrypt_opus(
+                                &payload[first_payload_byte..first_payload_byte + payload_len],
+                            )?
+                            .into_owned();
 
-                    payload_len = copy_dave_frame(
-                        payload,
-                        first_payload_byte,
-                        crypto_mode.payload_suffix_len(),
-                        &encrypted,
-                    )?;
+                        payload_len = copy_dave_frame(
+                            payload,
+                            first_payload_byte,
+                            crypto_mode.payload_suffix_len(),
+                            &encrypted,
+                        )?;
+                    }
                 }
+            } else {
+                // Lock was contended across our deadline budget (MLS key rotation in flight).
+                // DAVE protocol permits unencrypted silence packets (OPUS_SILENCE_PACKET)
+                // without encryption, allowing the audio stream to maintain its 20ms timing
+                // without stalling the worker thread or bursting packets.
+                trace!("DAVE session lock contended during key rotation; emitting comfort silence");
+                let pre_len = first_payload_byte;
+                payload[pre_len..pre_len + SILENT_FRAME.len()].copy_from_slice(&SILENT_FRAME[..]);
+                payload_len = SILENT_FRAME.len();
             }
         }
 

@@ -13,6 +13,7 @@ use crate::{
     ConnectionInfo,
 };
 use flume::Receiver;
+use parking_lot::RwLock;
 use rand::{distr::Uniform, Rng};
 use serenity_voice_model::{
     id::UserId,
@@ -30,7 +31,6 @@ use std::{
     sync::{
         atomic::{AtomicU16, Ordering},
         Arc,
-        RwLock,
     },
     time::Duration,
 };
@@ -321,11 +321,7 @@ impl AuxNetwork {
                 if ev.transition_id == 0 {
                     self.execute_dave_transition(ev.transition_id);
                 } else if ev.protocol_version == 0 {
-                    if let Some(ref mut dave_session) = *self
-                        .dave_session
-                        .write()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    {
+                    if let Some(ref mut dave_session) = *self.dave_session.write() {
                         dave_session.set_passthrough_mode(true, Some(120));
                     }
 
@@ -352,11 +348,7 @@ impl AuxNetwork {
                 }
             },
             GatewayEvent::DaveMlsExternalSender(ev) => {
-                if let Some(ref mut dave_session) = *self
-                    .dave_session
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                {
+                if let Some(ref mut dave_session) = *self.dave_session.write() {
                     if let Err(e) = dave_session.set_external_sender(&ev.external_sender) {
                         warn!(error = ?e, "error setting MLS external sender");
                     }
@@ -367,31 +359,31 @@ impl AuxNetwork {
                     DaveMlsProposalsOperationType::Append => davey::ProposalsOperationType::APPEND,
                     DaveMlsProposalsOperationType::Revoke => davey::ProposalsOperationType::REVOKE,
                 };
-                let result = if let Some(ref mut dave_session) = *self
-                    .dave_session
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                {
-                    match dave_session.process_proposals(
-                        operation_type,
-                        &ev.proposals,
-                        Some(
-                            &self
-                                .recognized_user_ids
-                                .iter()
-                                .map(|u| u.0)
-                                .collect::<Vec<_>>(),
-                        ),
-                    ) {
-                        Ok(result) => result,
-                        Err(e) => {
-                            warn!(error = ?e, "error processing MLS proposals");
-                            None
-                        },
+                let dave_session = self.dave_session.clone();
+                let recognized_user_ids: Vec<u64> =
+                    self.recognized_user_ids.iter().map(|u| u.0).collect();
+                let proposals = ev.proposals;
+
+                let result = tokio::task::spawn_blocking(move || {
+                    let mut lock = dave_session.write();
+                    if let Some(ref mut session) = *lock {
+                        match session.process_proposals(
+                            operation_type,
+                            &proposals,
+                            Some(&recognized_user_ids),
+                        ) {
+                            Ok(result) => result,
+                            Err(e) => {
+                                warn!(error = ?e, "error processing MLS proposals");
+                                None
+                            },
+                        }
+                    } else {
+                        None
                     }
-                } else {
-                    None
-                };
+                })
+                .await
+                .unwrap_or(None);
 
                 if let Some(commit_welcome) = result {
                     self.ws_client
@@ -403,7 +395,7 @@ impl AuxNetwork {
                 }
             },
             GatewayEvent::DaveMlsAnnounceCommitTransition(ev) => {
-                match self.dave_process_commit(&ev.commit_message) {
+                match self.dave_process_commit(ev.commit_message).await {
                     Some(Ok(())) if ev.transition_id != 0 => {
                         let protocol_version = self.dave_protocol_version.load(Ordering::Relaxed);
 
@@ -434,7 +426,7 @@ impl AuxNetwork {
                     Some(Ok(())) | None => {},
                 }
             },
-            GatewayEvent::DaveMlsWelcome(ev) => match self.dave_process_welcome(&ev.welcome) {
+            GatewayEvent::DaveMlsWelcome(ev) => match self.dave_process_welcome(ev.welcome).await {
                 Some(Ok(())) if ev.transition_id != 0 => {
                     let protocol_version = self.dave_protocol_version.load(Ordering::Relaxed);
 
@@ -473,30 +465,32 @@ impl AuxNetwork {
         Ok(())
     }
 
-    fn dave_process_commit(
+    async fn dave_process_commit(
         &mut self,
-        commit_message: &[u8],
+        commit_message: Vec<u8>,
     ) -> Option<Result<(), davey::errors::ProcessCommitError>> {
-        let mut dave_session_lock = self
-            .dave_session
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let dave_session = (*dave_session_lock).as_mut()?;
-
-        Some(dave_session.process_commit(commit_message))
+        let dave_session = self.dave_session.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut lock = dave_session.write();
+            let session = (*lock).as_mut()?;
+            Some(session.process_commit(&commit_message))
+        })
+        .await
+        .ok()?
     }
 
-    fn dave_process_welcome(
+    async fn dave_process_welcome(
         &mut self,
-        welcome: &[u8],
+        welcome: Vec<u8>,
     ) -> Option<Result<(), davey::errors::ProcessWelcomeError>> {
-        let mut dave_session_lock = self
-            .dave_session
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let dave_session = (*dave_session_lock).as_mut()?;
-
-        Some(dave_session.process_welcome(welcome))
+        let dave_session = self.dave_session.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut lock = dave_session.write();
+            let session = (*lock).as_mut()?;
+            Some(session.process_welcome(&welcome))
+        })
+        .await
+        .ok()?
     }
 
     async fn reinit_dave_session(&mut self) -> Result<(), DaveReinitError> {
@@ -506,11 +500,7 @@ impl AuxNetwork {
             let user_id = self.info.user_id.0.into();
             let channel_id = self.info.channel_id.0.into();
 
-            let key_package = if let Some(ref mut dave_session) = *self
-                .dave_session
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-            {
+            let key_package = if let Some(ref mut dave_session) = *self.dave_session.write() {
                 dave_session.reinit(dave_protocol_version, user_id, channel_id, None)?;
                 dave_session.create_key_package()?
             } else {
@@ -518,10 +508,7 @@ impl AuxNetwork {
                     davey::DaveSession::new(dave_protocol_version, user_id, channel_id, None)?;
                 let key_package = dave_session.create_key_package()?;
 
-                *self
-                    .dave_session
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(dave_session);
+                *self.dave_session.write() = Some(dave_session);
 
                 key_package
             };
@@ -531,11 +518,7 @@ impl AuxNetwork {
                     key_package,
                 }))
                 .await?;
-        } else if let Some(ref mut dave_session) = *self
-            .dave_session
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-        {
+        } else if let Some(ref mut dave_session) = *self.dave_session.write() {
             dave_session.reset()?;
             dave_session.set_passthrough_mode(true, Some(10));
         }
@@ -555,11 +538,7 @@ impl AuxNetwork {
 
         // Upgraded from transport-only encryption
         if transition_id > 0 && old_version == 0 && new_version != 0 {
-            if let Some(ref mut dave_session) = *self
-                .dave_session
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-            {
+            if let Some(ref mut dave_session) = *self.dave_session.write() {
                 dave_session.set_passthrough_mode(true, Some(10));
             }
         }

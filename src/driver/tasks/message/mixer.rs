@@ -9,9 +9,10 @@ use crate::{
     input::{AudioStreamError, Compose, Parsed},
 };
 use flume::Sender;
+use parking_lot::RwLock;
 use std::{
     net::UdpSocket,
-    sync::{atomic::AtomicU16, Arc, RwLock},
+    sync::{atomic::AtomicU16, Arc},
 };
 use symphonia_core::{errors::Error as SymphoniaError, formats::SeekedTo};
 
