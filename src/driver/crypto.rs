@@ -412,15 +412,23 @@ impl Cipher {
         // Update the start estimate to account for bytes occupied by extension headers.
         let payload_offset = if has_extension {
             let payload = packet.payload();
-            // `RtpExtensionPacket::packet_size()`/`payload()` trust the
-            // extension's *declared* word count, which can exceed the packet
-            // contents on a malformed packet and panic inside the accessor.
-            // Compute the (bounded) offset from the header directly instead.
+            // Validate the declared extension size against authenticated
+            // plaintext, excluding the transport suffix. Clamping to the full
+            // packet would return an offset beyond the end of the audio span.
             if payload.len() < 4 {
                 return Err(InternalError::IllegalVoicePacket);
             }
             let words = u16::from_be_bytes([payload[2], payload[3]]) as usize;
-            (4 + words * 4).min(payload.len())
+            let offset = 4 + words * 4;
+            if offset
+                > payload
+                    .len()
+                    .checked_sub(end)
+                    .ok_or(InternalError::IllegalVoicePacket)?
+            {
+                return Err(InternalError::IllegalVoicePacket);
+            }
+            offset
         } else {
             0
         };
@@ -505,6 +513,49 @@ impl Cipher {
 mod test {
     use super::*;
     use discortp::rtp::MutableRtpPacket;
+
+    #[test]
+    fn authenticated_extensions_must_fit_before_transport_suffix() {
+        for mode in [CryptoMode::Aes256Gcm, CryptoMode::XChaCha20Poly1305] {
+            for words in [1u16, 2, u16::MAX] {
+                let cipher = mode.cipher_from_key(&[7; 32]).unwrap();
+                // RTP header + clear extension preamble + 4 extension bytes
+                // + three Opus bytes + transport tag and nonce.
+                let mut bytes = vec![0; 12 + 4 + 4 + 3 + 20];
+                bytes[0] = 0x90;
+                bytes[12..14].copy_from_slice(&0xbedeu16.to_be_bytes());
+                bytes[14..16].copy_from_slice(&words.to_be_bytes());
+                bytes[20..23].copy_from_slice(&[0xf8, 0xff, 0xfe]);
+                let (aad, rest) = bytes.split_at_mut(16);
+                let (body, suffix) = rest.split_at_mut(7);
+                match &cipher {
+                    Cipher::Aes256Gcm(cipher) => {
+                        let tag = cipher
+                            .encrypt_in_place_detached(&aes_gcm::Nonce::default(), aad, body)
+                            .unwrap();
+                        suffix[..16].copy_from_slice(&tag);
+                    },
+                    Cipher::XChaCha20Poly1305(cipher) => {
+                        let tag = cipher
+                            .encrypt_in_place_detached(
+                                &chacha20poly1305::XNonce::default(),
+                                aad,
+                                body,
+                            )
+                            .unwrap();
+                        suffix[..16].copy_from_slice(&tag);
+                    },
+                }
+                let result =
+                    cipher.decrypt_rtp_in_place(&mut MutableRtpPacket::new(&mut bytes).unwrap());
+                if words == 1 {
+                    assert_eq!(result.unwrap(), (8, 20));
+                } else {
+                    assert!(result.is_err());
+                }
+            }
+        }
+    }
 
     #[test]
 

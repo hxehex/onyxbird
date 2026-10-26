@@ -58,6 +58,7 @@ pub struct PreparingInfo {
 pub struct DecodeState {
     pub inner_pos: usize,
     pub resampler: Option<(usize, FftFixedOut<f32>, Vec<Vec<f32>>)>,
+    pub resampler_spec: Option<symphonia_core::audio::SignalSpec>,
     pub passthrough: Passthrough,
     pub passthrough_violations: u8,
 }
@@ -66,6 +67,7 @@ impl DecodeState {
     pub fn reset(&mut self) {
         self.inner_pos = 0;
         self.resampler = None;
+        self.resampler_spec = None;
     }
 
     pub fn record_and_check_passthrough_strike_final(&mut self, fatal: bool) -> bool {
@@ -83,6 +85,7 @@ impl Default for DecodeState {
         Self {
             inner_pos: 0,
             resampler: None,
+            resampler_spec: None,
             passthrough: Passthrough::Inactive,
             passthrough_violations: 0,
         }

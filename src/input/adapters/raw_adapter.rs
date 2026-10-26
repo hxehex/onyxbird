@@ -68,12 +68,13 @@ impl<A: MediaSource> Seek for RawAdapter<A> {
             let target_pos = match pos {
                 SeekFrom::Start(p) => p,
                 SeekFrom::End(_) => return Err(IoErrorKind::Unsupported.into()),
-                SeekFrom::Current(p) if p.unsigned_abs() > self.pos =>
-                    return Err(IoErrorKind::InvalidInput.into()),
-                SeekFrom::Current(p) => (self.pos as i64 + p) as u64,
+                SeekFrom::Current(p) => self
+                    .pos
+                    .checked_add_signed(p)
+                    .ok_or(IoErrorKind::InvalidInput)?,
             };
 
-            let out = if target_pos as usize <= self.prepend.len() {
+            let out = if target_pos <= self.prepend.len() as u64 {
                 self.inner.rewind().map(|()| 0)
             } else {
                 // The virtual stream is [prepend][inner]: translate the
@@ -112,5 +113,28 @@ impl<A: MediaSource + Send + Sync + 'static> From<RawAdapter<A>> for Input {
         });
 
         Input::Live(live, None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn seeks_use_virtual_offsets_and_allow_forward_relative_seeks() {
+        let mut raw = RawAdapter::new(Cursor::new((0u8..64).collect::<Vec<_>>()), 48_000, 2);
+        assert_eq!(raw.seek(SeekFrom::Current(32)).unwrap(), 32);
+        let mut byte = [0];
+        raw.read_exact(&mut byte).unwrap();
+        assert_eq!(byte, [16]);
+        assert_eq!(raw.seek(SeekFrom::Current(-17)).unwrap(), 16);
+        raw.read_exact(&mut byte).unwrap();
+        assert_eq!(byte, [0]);
+        assert!(raw.seek(SeekFrom::Current(-18)).is_err());
+        assert_eq!(raw.seek(SeekFrom::Start(8)).unwrap(), 8);
+        let mut rate = [0; 4];
+        raw.read_exact(&mut rate).unwrap();
+        assert_eq!(u32::from_le_bytes(rate), 48_000);
     }
 }

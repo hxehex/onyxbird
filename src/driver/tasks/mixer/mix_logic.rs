@@ -79,9 +79,11 @@ pub fn mix_symph_indiv(
                     // seen. The main one is that most Opus tracks end on a sub-20ms
                     // frame, particularly on Youtube.
                     // However, a frame that's bigger than the target buffer is an instant block.
-                    let buf_size_fatal = buf.len() >= slot.len();
+                    let buf_size_fatal = buf.len() > slot.len();
 
-                    if match sample_ct {
+                    if buf_size_fatal {
+                        local_state.record_and_check_passthrough_strike_final(true);
+                    } else if match sample_ct {
                         Some(Ok(MONO_FRAME_SIZE)) => true,
                         _ => !local_state.record_and_check_passthrough_strike_final(buf_size_fatal),
                     } {
@@ -113,11 +115,7 @@ pub fn mix_symph_indiv(
                 let in_len = resample_scratch.frames();
                 let to_render = resampler.input_frames_next().saturating_sub(in_len);
 
-                // At end-of-stream a source above ~96 kHz can demand more
-                // input frames than the scratch can hold: skip the final
-                // flush (losing a partial resampler chunk of tail audio)
-                // rather than tripping `render_reserved`'s release-active
-                // capacity assert.
+                // Scratch is sized from the resampler's input requirement.
                 if resample_scratch.capacity() >= in_len + to_render {
                     if to_render != 0 {
                         resample_scratch.render_reserved(Some(to_render));
@@ -174,55 +172,55 @@ pub fn mix_symph_indiv(
             local_state.inner_pos += samples_marched;
             local_state.inner_pos %= pkt_frames;
         } else {
-            // A source declaring a zero sample rate (e.g. a malformed WAV
-            // header) would panic on resampler construction below: end the
-            // track instead.
-            if in_rate == 0 {
-                tracing::warn!("source declares a zero sample rate -- ending track");
-                track_status = MixStatus::Ended;
+            let spec = *source_packet.spec();
+            let chan_c = spec.channels.count();
+            if in_rate == 0 || in_rate > 1_000_000 || chan_c == 0 {
+                track_status = symphonia_core::errors::Error::DecodeError(
+                    "source has an invalid sample rate or channel layout",
+                )
+                .into();
                 break;
             }
 
-            // NOTE: this should NEVER change in one stream.
-            // The scratch buffer used by this path is stereo: resampling more
-            // than the first two channels would slice past its planes (a
-            // worker-killing panic), and the mixer outputs stereo regardless.
-            let chan_c = source_packet.spec().channels.count().min(2);
-            let (_, resampler, rs_out_buf) = local_state.resampler.get_or_insert_with(|| {
-                // TODO: integ. error handling here.
-                let resampler = FftFixedOut::new(
+            if local_state.resampler.is_none() || local_state.resampler_spec != Some(spec) {
+                let Ok(resampler) = FftFixedOut::new(
                     in_rate as usize,
                     SAMPLE_RATE_RAW,
                     RESAMPLE_OUTPUT_FRAME_SIZE,
                     4,
                     chan_c,
-                )
-                .expect("Failed to create resampler.");
+                ) else {
+                    track_status = symphonia_core::errors::Error::DecodeError(
+                        "could not initialise source resampler",
+                    )
+                    .into();
+                    break;
+                };
                 let out_buf = resampler.output_buffer_allocate(true);
-
-                (chan_c, resampler, out_buf)
-            });
+                local_state.resampler = Some((chan_c, resampler, out_buf));
+                local_state.resampler_spec = Some(spec);
+                resample_scratch.clear();
+                resample_in_progress = false;
+            }
+            let (_, resampler, rs_out_buf) = local_state.resampler.as_mut().unwrap();
 
             let inner_pos = local_state.inner_pos;
 
             let needed_in_frames = resampler.input_frames_next();
+            prepare_scratch(resample_scratch, needed_in_frames, spec);
             let available_frames = pkt_frames - inner_pos;
 
             let force_copy = resample_in_progress || needed_in_frames > available_frames;
             if (!force_copy) && matches!(source_packet, AudioBufferRef::F32(_)) {
-                // This is the only case where we can pull off a straight resample...
-                // I would really like if this could be a slice of slices,
-                // but the technology just isn't there yet. And I don't feel like
-                // writing unsafe transformations to do so.
-
                 // NOTE: if let needed as if-let && {bool} is nightly only.
                 if let AudioBufferRef::F32(s_pkt) = source_packet {
                     // Fill a small stack array instead of collecting a heap
                     // `Vec` on every 20 ms tick of a resampled track.
                     let plane_refs = s_pkt.planes();
                     let planes = plane_refs.planes();
-                    let n = planes.len().min(chan_c);
-                    let mut refs: [&[f32]; 2] = [&[]; 2];
+                    let n = planes.len();
+                    // Symphonia represents channel assignments as a u32 mask.
+                    let mut refs: [&[f32]; 32] = [&[]; 32];
                     for (dst, s) in refs.iter_mut().zip(planes.iter()).take(n) {
                         *dst = &s[inner_pos..][..needed_in_frames];
                     }
@@ -242,19 +240,6 @@ pub fn mix_symph_indiv(
                 let old_scratch_len = resample_scratch.frames();
                 let missing_frames = needed_in_frames.saturating_sub(old_scratch_len);
                 let frames_to_take = available_frames.min(missing_frames);
-
-                if old_scratch_len + frames_to_take > resample_scratch.capacity() {
-                    // Sources above ~96 kHz demand more input frames per
-                    // resampler chunk than the scratch buffer can hold:
-                    // end the track rather than tripping `render_reserved`'s
-                    // release-active capacity assert.
-                    tracing::warn!(
-                        "source requires {needed_in_frames} resampler input frames, \
-                         exceeding mixer scratch capacity -- ending track"
-                    );
-                    track_status = MixStatus::Ended;
-                    break;
-                }
 
                 resample_scratch.render_reserved(Some(frames_to_take));
                 copy_into_resampler(
@@ -292,6 +277,29 @@ pub fn mix_symph_indiv(
     }
 
     (MixType::MixedPcm(samples_written), track_status)
+}
+
+fn prepare_scratch(scratch: &mut AudioBuffer<f32>, frames: usize, spec: SignalSpec) {
+    if scratch.capacity() >= frames && scratch.spec().channels.count() >= spec.channels.count() {
+        return;
+    }
+    let new_spec = if spec.channels.count() > scratch.spec().channels.count() {
+        spec
+    } else {
+        *scratch.spec()
+    };
+    let mut replacement = AudioBuffer::<f32>::new(frames.max(scratch.capacity()) as u64, new_spec);
+    let pending = scratch.frames();
+    replacement.render_reserved(Some(pending));
+    for (dst, src) in replacement
+        .planes_mut()
+        .planes()
+        .iter_mut()
+        .zip(scratch.planes().planes())
+    {
+        dst[..pending].copy_from_slice(&src[..pending]);
+    }
+    *scratch = replacement;
 }
 
 #[inline]
@@ -391,7 +399,9 @@ fn mix_resampled(
     dest_pos: usize,
     volume: f32,
 ) -> usize {
-    let mix_ct = source[0].len();
+    let mix_ct = source[0]
+        .len()
+        .min(target.frames().saturating_sub(dest_pos));
 
     let target_chans = target.spec().channels.count();
     let target_mono = target_chans == 1;

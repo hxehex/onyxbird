@@ -250,10 +250,12 @@ mod test {
         };
 
         let sched = Scheduler::new(config);
-        let (pkt_tx, _pkt_rx) = flume::unbounded();
+        let (pkt_tx, pkt_rx) = flume::unbounded();
         let cfg = DriverConfig::default()
             .scheduler(sched.clone())
-            .override_connection(Some(OutputMode::Rtp(pkt_tx)));
+            // These drivers have no voice connection/transport keys. Raw
+            // output exercises mixing without calling prep_packet on None.
+            .override_connection(Some(OutputMode::Raw(pkt_tx)));
 
         let n_tasks = 1024;
 
@@ -269,6 +271,10 @@ mod test {
 
         assert_eq!(sched.total_tasks(), n_tasks);
         assert_eq!(sched.live_tasks(), n_tasks);
+        assert!(
+            !pkt_rx.is_empty(),
+            "workers must produce audio, not merely increment counters"
+        );
         assert_eq!(
             sched.worker_threads(),
             n_tasks / (DEFAULT_MIXERS_PER_THREAD.get() as u64)

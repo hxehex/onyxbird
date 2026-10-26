@@ -129,12 +129,12 @@ impl EventStore {
                 // Only remove/readd if the event type changes (i.e., Some AND new != old)
                 if let Some(new_evt_type) = evt.action.act(&ctx).await {
                     if evt.event == new_evt_type {
+                        i += 1;
+                    } else {
                         let mut evt = events.remove(i);
 
                         evt.event = new_evt_type;
                         self.add_event(evt, now);
-                    } else {
-                        i += 1;
                     }
                 } else {
                     i += 1;
@@ -258,6 +258,64 @@ impl GlobalEvents {
         // Now drain vecs.
         for indices in self.awaiting_tick.values_mut() {
             indices.clear();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    struct ChangeEvent(Arc<AtomicUsize>, Option<Event>);
+
+    #[async_trait::async_trait]
+    impl EventHandler for ChangeEvent {
+        async fn act(&self, _: &EventContext<'_>) -> Option<Event> {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            self.1
+        }
+    }
+
+    #[tokio::test]
+    async fn untimed_handlers_cancel_persist_and_change_trigger() {
+        let original = Event::Track(TrackEvent::Play);
+        for returned in [
+            None,
+            Some(original),
+            Some(Event::Cancel),
+            Some(Event::Track(TrackEvent::Pause)),
+        ] {
+            let calls = Arc::new(AtomicUsize::new(0));
+            let mut store = EventStore::new();
+            store.add_event(
+                EventData::new(original, ChangeEvent(calls.clone(), returned)),
+                Duration::ZERO,
+            );
+            for _ in 0..2 {
+                store
+                    .process_untimed(
+                        Duration::ZERO,
+                        TrackEvent::Play.into(),
+                        EventContext::Track(&[]),
+                    )
+                    .await;
+            }
+            let persists = returned.is_none() || returned == Some(original);
+            assert_eq!(calls.load(Ordering::Relaxed), if persists { 2 } else { 1 });
+            store
+                .process_untimed(
+                    Duration::ZERO,
+                    TrackEvent::Pause.into(),
+                    EventContext::Track(&[]),
+                )
+                .await;
+            if returned == Some(Event::Track(TrackEvent::Pause)) {
+                assert_eq!(calls.load(Ordering::Relaxed), 2);
+            }
         }
     }
 }

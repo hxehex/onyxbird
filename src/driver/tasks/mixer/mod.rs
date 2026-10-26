@@ -5,6 +5,9 @@ pub mod state;
 pub mod track;
 mod util;
 
+#[cfg(test)]
+mod tests;
+
 use pool::*;
 use result::*;
 use state::*;
@@ -93,6 +96,24 @@ fn new_encoder(bitrate: Bitrate, mix_mode: MixMode) -> Result<OpusEncoder> {
     encoder.set_bitrate(bitrate)?;
 
     Ok(encoder)
+}
+
+fn copy_dave_frame(
+    payload: &mut [u8],
+    prefix: usize,
+    suffix: usize,
+    frame: &[u8],
+) -> Result<usize> {
+    let end = payload
+        .len()
+        .checked_sub(suffix)
+        .ok_or(Error::DaveEncrypt)?;
+    let available = end.checked_sub(prefix).ok_or(Error::DaveEncrypt)?;
+    if frame.len() > available {
+        return Err(Error::DaveEncrypt);
+    }
+    payload[prefix..prefix + frame.len()].copy_from_slice(frame);
+    Ok(frame.len())
 }
 
 impl Mixer {
@@ -463,45 +484,29 @@ impl Mixer {
             }
         }
 
-        // Fire all state changes for finished tracks *before* removing any of
-        // them, and remove in descending index order. The event thread's
-        // per-track lists only apply removals when it processes the `Tick`
-        // message below, so its layout still matches this one here: indices
-        // sent mid-pass must refer to the pre-removal layout. Firing per
-        // removal with post-`swap_remove` indices collides when two or more
-        // tracks finish in the same pass, permanently desynchronising both
-        // threads (wrong events, leaked handles, and a stalled `TrackQueue`).
-        let mut done_tracks = Vec::new();
+        // Notifications use the layout before any removal. Both tasks must
+        // then compact in the same forward swap-remove order: descending
+        // removal can leave surviving handles in a different order.
+        for (i, track) in self.tracks.iter().enumerate() {
+            if track.playing.is_done() {
+                self.fire_event(EventMessage::ChangeState(
+                    i,
+                    TrackStateChange::Mode(track.playing.clone()),
+                ))?;
+            }
+        }
+
         let mut i = 0;
         while i < self.tracks.len() {
-            let track = self
-                .tracks
-                .get(i)
-                .expect("Tried to remove an illegal track index.");
-
-            if track.playing.is_done() {
-                done_tracks.push((i, track.playing.clone()));
+            if self.tracks[i].playing.is_done() {
+                let to_drop = self.tracks.swap_remove(i);
+                self.disposer
+                    .dispose(DisposalMessage::Track(Box::new(to_drop)));
+                let to_drop = self.track_handles.swap_remove(i);
+                self.disposer.dispose(DisposalMessage::Handle(to_drop));
+            } else {
+                i += 1;
             }
-            i += 1;
-        }
-
-        for (idx, p_state) in &done_tracks {
-            self.fire_event(EventMessage::ChangeState(
-                *idx,
-                TrackStateChange::Mode(p_state.clone()),
-            ))?;
-        }
-
-        // Descending order keeps every collected index valid for the whole
-        // pass (`swap_remove` only disturbs positions at/after the removed
-        // index).
-        for (idx, _) in done_tracks.iter().rev() {
-            let to_drop = self.tracks.swap_remove(*idx);
-            self.disposer
-                .dispose(DisposalMessage::Track(Box::new(to_drop)));
-
-            let to_drop = self.track_handles.swap_remove(*idx);
-            self.disposer.dispose(DisposalMessage::Handle(to_drop));
         }
 
         // Tick -- receive side also handles removals in same manner after it increments
@@ -656,7 +661,11 @@ impl Mixer {
         let payload = rtp.payload_mut();
         let crypto_mode = conn.crypto_state.kind();
         let first_payload_byte = crypto_mode.payload_prefix_len();
-        let total_payload_space = payload.len() - crypto_mode.payload_suffix_len();
+        let total_payload_space = payload
+            .len()
+            .checked_sub(crypto_mode.payload_suffix_len())
+            .filter(|end| *end >= first_payload_byte)
+            .ok_or(Error::Other)?;
 
         // If passthrough, Opus payload in place already.
         // Else encode into buffer with space for AEAD encryption headers.
@@ -667,6 +676,10 @@ impl Mixer {
                 &mut payload[first_payload_byte..total_payload_space],
             )?,
         };
+
+        if payload_len > total_payload_space - first_payload_byte {
+            return Err(Error::Other);
+        }
 
         if conn.dave_protocol_version.load(Ordering::Relaxed) != 0 {
             // Recover from a poisoned lock rather than unwrapping: a panic
@@ -685,17 +698,12 @@ impl Mixer {
                         )?
                         .into_owned();
 
-                    // DAVE framing adds ~24 bytes over the plaintext frame.
-                    // Fail the tick if it cannot fit rather than panicking
-                    // on the slice below.
-                    if encrypted.len() <= payload.len() - first_payload_byte {
-                        payload_len = encrypted.len();
-
-                        payload[first_payload_byte..first_payload_byte + payload_len]
-                            .copy_from_slice(&encrypted);
-                    } else {
-                        return Err(Error::DaveEncrypt);
-                    }
+                    payload_len = copy_dave_frame(
+                        payload,
+                        first_payload_byte,
+                        crypto_mode.payload_suffix_len(),
+                        &encrypted,
+                    )?;
                 }
             }
         }

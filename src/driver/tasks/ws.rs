@@ -65,6 +65,15 @@ pub(crate) struct AuxNetwork {
     ssrc_signalling: Arc<SsrcTracker>,
 }
 
+fn heartbeat_duration(milliseconds: f64) -> Option<Duration> {
+    // A zero interval makes the biased heartbeat branch starve WS messages.
+    // `clamp` alone also leaves NaN unchanged.
+    if !milliseconds.is_finite() || !(100.0..=600_000.0).contains(&milliseconds) {
+        return None;
+    }
+    Duration::try_from_secs_f64(milliseconds / 1000.0).ok()
+}
+
 impl AuxNetwork {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
@@ -88,12 +97,10 @@ impl AuxNetwork {
             dont_send: false,
 
             ssrc,
-            // The gateway controls this value: a hostile or malformed HELLO
-            // (negative / NaN / huge) would panic the connection task on
-            // every reconnect attempt. Clamp to a sane range instead.
-            heartbeat_interval: Duration::from_secs_f64(
-                (heartbeat_interval / 1000.0).clamp(0.0, 600.0),
-            ),
+            heartbeat_interval: heartbeat_duration(heartbeat_interval).unwrap_or_else(|| {
+                warn!("Invalid voice heartbeat interval; using 13.75 seconds");
+                Duration::from_millis(13_750)
+            }),
 
             speaking: SpeakingState::empty(),
             last_heartbeat_nonce: None,
@@ -151,9 +158,12 @@ impl AuxNetwork {
                             *interconnect = i;
                         },
                         Ok(WsMessage::SetKeepalive(keepalive)) => {
-                            self.heartbeat_interval =
-                                Duration::from_secs_f64((keepalive / 1000.0).clamp(0.0, 600.0));
-                            next_heartbeat = self.next_heartbeat();
+                            if let Some(interval) = heartbeat_duration(keepalive) {
+                                self.heartbeat_interval = interval;
+                                next_heartbeat = self.next_heartbeat();
+                            } else {
+                                warn!("Ignoring invalid voice heartbeat interval");
+                            }
                         },
                         Ok(WsMessage::Speaking(is_speaking)) => {
                             if self.speaking.contains(SpeakingState::MICROPHONE) != is_speaking && !self.dont_send {
@@ -591,5 +601,29 @@ fn ws_error_is_not_final(err: &WsError) -> bool {
             debug!("Error sending/receiving ws {:?}.", e);
             true
         },
+    }
+}
+
+#[cfg(test)]
+mod heartbeat_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_intervals_that_panic_or_starve_the_websocket_loop() {
+        for interval in [
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            -1.0,
+            0.0,
+            0.00001,
+            1e300,
+        ] {
+            assert_eq!(heartbeat_duration(interval), None);
+        }
+        assert_eq!(
+            heartbeat_duration(13_750.0),
+            Some(Duration::from_millis(13_750))
+        );
     }
 }

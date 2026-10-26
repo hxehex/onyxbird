@@ -170,26 +170,35 @@ impl UdpRx {
                 let has_extension = rtp.get_extension() != 0;
 
                 let mut packet_data = if self.config.decode_mode.should_decrypt() {
-                    let out = self.cipher.decrypt_rtp_in_place(&mut rtp).map(|(s, t)| {
-                        let padding_count = if rtp.get_padding() != 0 {
-                            // The count byte sits immediately before the crypto
-                            // suffix. On a malformed packet whose payload is no
-                            // longer than the suffix itself, the index below
-                            // would underflow -- treat it as zero padding
-                            // rather than panicking the receive task.
-                            rtp.payload()
-                                .len()
-                                .checked_sub(t + 1)
-                                .and_then(|i| rtp.payload().get(i).map(|b| usize::from(*b)))
-                                .unwrap_or(0)
-                        } else {
-                            0
-                        };
-                        (s, t + padding_count, true)
-                    });
+                    let out = self
+                        .cipher
+                        .decrypt_rtp_in_place(&mut rtp)
+                        .and_then(|(s, t)| {
+                            let padding_count = if rtp.get_padding() != 0 {
+                                let payload = rtp.payload();
+                                let end = payload
+                                    .len()
+                                    .checked_sub(t)
+                                    .ok_or(super::error::Error::IllegalVoicePacket)?;
+                                let count = end
+                                    .checked_sub(1)
+                                    .and_then(|i| payload.get(i))
+                                    .copied()
+                                    .map(usize::from)
+                                    .ok_or(super::error::Error::IllegalVoicePacket)?;
+                                if count == 0 || count > end.saturating_sub(s) {
+                                    return Err(super::error::Error::IllegalVoicePacket);
+                                }
+                                count
+                            } else {
+                                0
+                            };
+                            Ok((s, t + padding_count, true))
+                        });
 
                     if let Err(ref e) = out {
                         warn!("RTP decryption failed: {:?}", e);
+                        return;
                     }
                     out.ok()
                 } else {
