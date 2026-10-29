@@ -315,6 +315,20 @@ impl Live {
     #[inline(always)]
     #[allow(clippy::inline_always)]
     fn _march_deadline(&mut self) {
+        // Diagnostics: how far past the scheduled deadline this send tick
+        // actually fires. `late >= TIMESTEP_LENGTH` means a full tick or more
+        // was lost and this worker is now in catch-up mode, firing ticks
+        // back-to-back -- remote jitter buffers render that as clicks, gaps,
+        // or pitch warping. Normal scheduler noise stays well under 5ms.
+        let late = Instant::now().saturating_duration_since(self.deadline);
+        if late >= TIMESTEP_LENGTH {
+            tracing::warn!(
+                late_us = late.as_micros() as u64,
+                "mixer tick overran deadline"
+            );
+        } else if late >= Duration::from_millis(5) {
+            tracing::debug!(late_us = late.as_micros() as u64, "mixer tick late");
+        }
         std::thread::sleep(self.deadline.saturating_duration_since(Instant::now()));
         self.deadline += TIMESTEP_LENGTH;
     }

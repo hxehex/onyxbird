@@ -342,10 +342,12 @@ impl UdpRx {
                 };
 
                 let (start, tail) = packet_data.unwrap_or_else(|| {
-                    (
-                        crypto_mode.payload_prefix_len(),
-                        crypto_mode.payload_suffix_len(),
-                    )
+                    // Plain-text fallback: in the DAVE era, Discord's server
+                    // RTCP (receiver reports, etc.) no longer carries the
+                    // transport crypto suffix. Rather than handing listeners
+                    // a packet truncated by a bogus `payload_suffix_len`,
+                    // forward the entire packet unparsed.
+                    (0, 0)
                 });
 
                 drop(interconnect.events.send(EventMessage::FireCoreEvent(
